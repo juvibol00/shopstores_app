@@ -1,0 +1,38 @@
+# La base con la que se prueba en la computadora. **Lo más importante de este
+# archivo.** Adentro están el hash del PIN, la clave de aplicación de Gmail
+# cifrada y la cadena de conexión de Neon, además de ventas de mentira. Nada de
+# eso se sube a ningún lado.
+datos/
+
+# Cache de Python: se regenera sola.
+#
+# En sell-b_mobile estos llegaron a estar RASTREADOS —13 archivos .pyc—, y por eso
+# el APK de retail salía con una carpeta __pycache__ adentro aunque lo compilara
+# GitHub Actions con otra versión de Python: el checkout los traía del repositorio.
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Salidas de compilación. El APK lo arma GitHub Actions
+# (.github/workflows/build_apk.yml); no se sube hecho.
+build/
+dist/
+.flet/
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Lo que deja cada prueba al correr
+pruebas/catalogo_muestra.pdf
+
+# Cosas del sistema y del editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Las claves nunca entran al repositorio
+.env
+*.env

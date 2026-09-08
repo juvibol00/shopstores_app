@@ -1,0 +1,54 @@
+name: Build Vanes Store APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Leer el codigo del repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Preparar Java (necesario para Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # La misma version que `pyproject.toml`. Aqui no hay camara —las fotos salen
+      # de la galeria— asi que no hay extension que registrar; lo que importa es
+      # que el motor que construye sea el mismo con el que se probo.
+      - name: Instalar el motor de Flet
+        run: pip install flet==0.85.3
+
+      # `flet build` empaqueta la carpeta TAL CUAL: sin esto, el APK se lleva
+      # adentro la carpeta .git entera (historial, objetos y la URL del repo).
+      - name: Quitar del paquete lo que no va dentro del telefono
+        run: |
+          rm -rf .git .github
+          # `datos/` es la base con la que se prueba en la computadora: ventas de
+          # mentira, el hash del PIN y la clave del correo cifrada. En el telefono
+          # no se usa —alli la ruta la da FLET_APP_STORAGE_DATA— asi que viajaria
+          # de adorno, con datos reales adentro.
+          rm -rf datos
+          # Las pruebas se quedan junto al codigo que prueban, pero no se instalan:
+          # son ~100 KB que nadie va a correr en el telefono.
+          rm -rf pruebas
+          find . -name "__pycache__" -type d -prune -exec rm -rf {} +
+          echo "--- lo que se va a empaquetar ---"
+          ls -a
+
+      - name: Construir el APK
+        run: yes | flet build apk --verbose
+
+      - name: Guardar el APK para descargar
+        uses: actions/upload-artifact@v4
+        with:
+          name: VanesStore-APK
+          path: build/apk/**/*.apk

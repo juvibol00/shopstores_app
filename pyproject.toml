@@ -1,0 +1,43 @@
+[project]
+name = "vanes-store"
+version = "0.1.0"
+description = "Vane's Store — gestion de ventas movil"
+requires-python = ">=3.10"
+
+# Clavado a proposito, con lo aprendido en la Fase 0:
+#
+# - `flet` en 0.85.3, la misma de SELL-B, para conservar las trampas ya
+#   documentadas en la seccion 10 del diseno.
+# - **`pillow` tiene que ser 12.2.0.** Flet publica ruedas de Android solo de
+#   algunas versiones y la 12.3.0 no esta; si pip resuelve a la mas nueva, el APK
+#   no compila.
+#
+# - `fpdf2` arma el catalogo. Es `py3-none-any`, Python puro.
+# - `cryptography` cifra la clave del correo con la llave derivada del PIN. Flet
+#   publica rueda de Android de la 48.0.0; **no subir sin comprobar la lista**.
+#
+# `sqlite3`, `hashlib` y `smtplib` son biblioteca estandar: la base, el PIN y el
+# envio del correo no agregan dependencia.
+# - `pg8000` habla con Neon. Tambien es `py3-none-any`.
+dependencies = [
+    "flet==0.85.3",
+    "pillow==12.2.0",
+    "fpdf2==2.8.8",
+    "cryptography==48.0.0",
+    "pg8000==1.31.5",
+]
+
+[tool.flet]
+org = "com.bolivarsoftware"
+product = "Vane's Store"
+company = "Bolivar Software Company"
+
+[tool.flet.app]
+# El identificador no se puede cambiar despues sin desinstalar y perder los datos.
+module = "main"
+
+[tool.flet.android]
+package = "com.bolivarsoftware.vanesstore"
+
+[tool.flet.android.permission]
+"android.permission.INTERNET" = true
