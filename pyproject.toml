@@ -13,8 +13,15 @@ requires-python = ">=3.10"
 #   no compila.
 #
 # - `fpdf2` arma el catalogo. Es `py3-none-any`, Python puro.
-# - `cryptography` cifra la clave del correo con la llave derivada del PIN. Flet
-#   publica rueda de Android de la 48.0.0; **no subir sin comprobar la lista**.
+#
+# - **`cryptography` tiene que ser 43.0.1.** Cifra la clave del correo con la
+#   llave derivada del PIN, y es el unico paquete con codigo nativo ademas de
+#   pillow, asi que depende del indice de Flet (https://pypi.flet.dev).
+#   La 48.0.0 esta publicada **solo para Python 3.14 y solo tres arquitecturas**
+#   —falta `x86`—, y por eso la primera compilacion murio en "Packaging Python
+#   app". La 43.0.1 esta como `cp37-abi3`, que vale para cualquier Python de 3.7
+#   en adelante, y con las cuatro arquitecturas. Comprobado en el indice, no
+#   supuesto: https://pypi.flet.dev/cryptography/
 #
 # `sqlite3`, `hashlib` y `smtplib` son biblioteca estandar: la base, el PIN y el
 # envio del correo no agregan dependencia.
@@ -23,7 +30,7 @@ dependencies = [
     "flet==0.85.3",
     "pillow==12.2.0",
     "fpdf2==2.8.8",
-    "cryptography==48.0.0",
+    "cryptography==43.0.1",
     "pg8000==1.31.5",
 ]
 
