@@ -427,18 +427,28 @@ repintar()
 check(len([c for c in todos(tira) if isinstance(c, ft.Image)]) == 1,
       "tras agregarla, la foto está en la MISMA tira que ya estaba en pantalla")
 
-# La otra mitad: recargar la ficha entera tiene que hacerse desde arriba. Si se
-# reemplaza el contenido aquí dentro, la ficha nueva queda colgando de un
-# contenedor que nunca se montó y a partir de la segunda vez no se ve nada.
-llamadas = []
-ficha2 = inventario_view._ficha(page, con_fotos, lambda: None,
-                                lambda: llamadas.append(1))
+# La otra mitad: repintar la ficha entera, muchas veces, tiene que escribir
+# siempre en el MISMO contenedor montado. Si cada repintado construye una copia y
+# le roba el contenido, del segundo en adelante se escribe en una pantalla que no
+# existe (ver frontend/pantalla.py).
+ficha2 = inventario_view._ficha(page, con_fotos, lambda: None)
 editar = next(c for c in todos(ficha2) if isinstance(c, ft.IconButton)
               and c.icon == ft.Icons.EDIT)
 recargar = cierre(editar.on_click, "recargar")
-check(recargar is not None, "la ficha tiene su recarga")
+check(recargar is not None, "la ficha tiene su repintado")
+
+bd.actualizar_producto(con_fotos, "Renombrado una vez", "", 5.0, 19.0, True)
 recargar()
-check(llamadas == [1], "y recargar vuelve a montar la ficha desde la pantalla padre")
+check(any(getattr(c, "value", None) == "Renombrado una vez" for c in todos(ficha2)),
+      "el primer repintado se ve en la ficha montada")
+
+# El que fallaba antes.
+bd.actualizar_producto(con_fotos, "Renombrado dos veces", "", 5.0, 19.0, True)
+editar2 = next(c for c in todos(ficha2) if isinstance(c, ft.IconButton)
+               and c.icon == ft.Icons.EDIT)
+cierre(editar2.on_click, "recargar")()
+check(any(getattr(c, "value", None) == "Renombrado dos veces" for c in todos(ficha2)),
+      "y el segundo también, sin salir y volver a entrar")
 
 print()
 print("Inicio: cambiar la tasa, que abre una ventana desde otra")
@@ -480,6 +490,56 @@ check(sigue and not [c for c in page.overlay if c is ventana_tasa],
 confirmar_tasa = [a for a in confirmacion.actions
                   if a.content == "Cambiar la tasa"]
 check(len(confirmar_tasa) == 1, "la confirmación dice qué se va a hacer")
+
+
+def estado_de(vista):
+    """El período que muestra el subtítulo de la pantalla de Gastos."""
+    for c in todos(vista):
+        texto = str(getattr(c, "value", ""))
+        if texto.startswith("Operativos · "):
+            return texto.replace("Operativos · ", "").strip()
+    return None
+
+
+print()
+print("Gestión: las pastillas de Gastos se pueden tocar muchas veces seguidas")
+# Fallo real, visto en el teléfono: tocabas «Semana» y cambiaba; tocabas «Mes»
+# después y no pasaba nada, había que salir y volver a entrar. La pantalla se
+# repintaba construyendo una copia nueva y robándole el contenido, así que los
+# botones repintados apuntaban a un contenedor que nunca se montó.
+vista_gestion = gestion_view.crear_vista_gestion(page)
+
+
+def pastillas_de(raiz):
+    """Las pastillas son contenedores con `on_click` y una etiqueta corta."""
+    encontradas = {}
+    for c in todos(raiz):
+        if isinstance(c, ft.Container) and c.on_click is not None:
+            texto = getattr(getattr(c, "content", None), "value", None)
+            if texto in ("Hoy", "Semana", "Mes"):
+                encontradas[texto] = c
+    return encontradas
+
+
+ir_a_gastos = next(c for c in todos(vista_gestion)
+                   if isinstance(c, ft.ElevatedButton) and c.content == "Gastos")
+ir_a_gastos.on_click(None)
+check("Gastos" in str([getattr(c, "value", "") for c in todos(vista_gestion)]),
+      "se entra a la pantalla de Gastos")
+
+for vuelta, (etiqueta, esperado) in enumerate(
+        [("Hoy", "hoy"), ("Mes", "este mes"), ("Semana", "esta semana"),
+         ("Hoy", "hoy")], 1):
+    pastilla = pastillas_de(vista_gestion).get(etiqueta)
+    check(pastilla is not None, f"la pastilla «{etiqueta}» está en pantalla (toque {vuelta})")
+    if pastilla is None:
+        break
+    pastilla.on_click(None)
+    # La prueba de verdad: que el toque haya cambiado el período. Antes, del
+    # segundo en adelante se escribía en una pantalla que no estaba montada.
+    check(estado_de(vista_gestion) == esperado,
+          f"el toque {vuelta} deja el período en «{esperado}» "
+          f"(quedó «{estado_de(vista_gestion)}»)")
 
 bd.cerrar()
 shutil.rmtree(TEMPORAL, ignore_errors=True)

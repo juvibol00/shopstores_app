@@ -59,6 +59,26 @@ def el_backend_no_sabe_de_pantallas():
     return infractores
 
 
+def nadie_se_repinta_robandose_el_contenido():
+    """Una pantalla no puede repintarse construyendo una copia de si misma.
+
+    El idioma prohibido es `contenedor.content = _pantalla(...).content`: la copia
+    trae su propio contenedor y su propio repintado, y los botones quedan
+    apuntando a una pantalla que nunca se monto. Se ve como que el primer toque
+    funciona y el segundo no. Para eso esta `frontend/pantalla.py`.
+    """
+    infractores = []
+    for ruta in sorted(glob.glob(os.path.join(APP, "frontend", "vistas", "*.py"))
+                       + glob.glob(os.path.join(APP, "frontend", "*.py"))):
+        for numero, linea in enumerate(open(ruta, encoding="utf-8"), 1):
+            limpia = linea.strip()
+            if ".content = " in limpia and limpia.endswith(").content"):
+                infractores.append(
+                    f"{os.path.relpath(ruta, APP)}:{numero}: se repinta robandole "
+                    f"el contenido a una copia; usa pantalla.repintable")
+    return infractores
+
+
 def solo_dialogos_toca_el_overlay():
     """`page.overlay` se manipula **solo** en `dialogos.py`.
 
@@ -124,6 +144,7 @@ def main():
     lineas = [l for l in salida.splitlines() if l.strip()]
     graves = [l for l in lineas if any(g in l for g in GRAVES)]
     graves += el_backend_no_sabe_de_pantallas()
+    graves += nadie_se_repinta_robandose_el_contenido()
     graves += solo_dialogos_toca_el_overlay()
     graves += los_formateadores_viven_en_formato()
     leves = [l for l in lineas if l not in graves]

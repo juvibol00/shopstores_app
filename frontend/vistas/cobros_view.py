@@ -19,6 +19,7 @@ from frontend import dialogos
 from frontend import estilo
 from backend import formato
 from frontend import paleta
+from frontend import pantalla
 
 
 def _texto_vencimiento(iso):
@@ -106,12 +107,14 @@ def _lista_deudores(page, al_abrir, al_ver_clientes):
 # ==========================================================================
 
 def _ficha_cliente(page, cliente_id, al_volver):
-    contenedor = ft.Container(expand=True)
+    return pantalla.repintable(
+        page,
+        lambda repintar: _cuerpo_ficha(page, cliente_id, al_volver, repintar))
 
-    def recargar():
-        contenedor.content = _ficha_cliente(page, cliente_id, al_volver).content
-        page.update()
 
+def _cuerpo_ficha(page, cliente_id, al_volver, recargar):
+    """El contenido de la ficha. `recargar` es el de la pantalla montada: hay que
+    usar **ese** y no armar uno propio (ver `frontend/pantalla.py`)."""
     cliente = basedatos.obtener_cliente(cliente_id)
     if cliente is None:
         al_volver()
@@ -165,7 +168,7 @@ def _ficha_cliente(page, cliente_id, al_volver):
                 estilo.dato(formato.dinero(a["monto_usd"]), size=13, color=paleta.OK),
             ], spacing=8))
 
-    contenedor.content = ft.Column([
+    return ft.Column([
         estilo.encabezado(
             cliente["nombre"], cliente["telefono"] or "sin teléfono",
             al_volver=al_volver,
@@ -188,8 +191,6 @@ def _ficha_cliente(page, cliente_id, al_volver):
             scroll=ft.ScrollMode.AUTO),
             padding=ft.Padding(14, 12, 14, 20), expand=True),
     ], spacing=0, expand=True)
-
-    return contenedor
 
 
 # ==========================================================================

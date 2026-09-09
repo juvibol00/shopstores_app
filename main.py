@@ -90,12 +90,25 @@ def _armar(page: ft.Page):
             ],
             on_change=cambiar,
         )
-        page.navigation_bar = barra["control"]
+        caja_barra.content = barra["control"]
         navegar("inicio")
 
-    page.navigation_bar = None
+    # La barra de secciones va **dentro** del contenido, no en `page.navigation_bar`.
+    # Android dibuja la aplicacion de borde a borde y sus propios botones —o la
+    # raya de gestos— quedan encima: la barra de la aplicacion aparecia pisada por
+    # la del telefono. Metida aca, entra en el `SafeArea` de abajo y el sistema le
+    # reserva su espacio.
+    caja_barra = ft.Container()
     cuerpo.content = crear_vista_pin(page, entrar)
-    page.add(cuerpo)
+
+    page.add(ft.SafeArea(
+        ft.Column([cuerpo, caja_barra], spacing=0, expand=True),
+        expand=True,
+        # Arriba tambien: sin esto, la hora y el nivel de bateria se dibujan sobre
+        # el encabezado beige.
+        avoid_intrusions_top=True,
+        avoid_intrusions_bottom=True,
+    ))
 
 
 def main(page: ft.Page):

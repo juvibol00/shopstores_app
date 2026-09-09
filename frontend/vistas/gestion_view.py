@@ -26,6 +26,7 @@ from frontend import dialogos
 from frontend import estilo
 from backend import formato
 from frontend import paleta
+from frontend import pantalla
 from backend import resumen_semanal
 
 DIAS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
@@ -294,12 +295,13 @@ def _resumen(page, estado, al_cambiar, al_ver_gastos):
 # ==========================================================================
 
 def _gastos(page, estado, al_volver):
-    contenedor = ft.Container(expand=True)
+    return pantalla.repintable(
+        page, lambda repintar: _cuerpo_gastos(page, estado, al_volver, repintar))
 
-    def recargar():
-        contenedor.content = _gastos(page, estado, al_volver).content
-        page.update()
 
+def _cuerpo_gastos(page, estado, al_volver, recargar):
+    """El contenido de Gastos. `recargar` es el de la pantalla montada: hay que
+    usar **ese** y no armar uno propio (ver `frontend/pantalla.py`)."""
     desde, hasta, etiqueta = basedatos.rango(estado["periodo"])
     lista = basedatos.listar_gastos(desde, hasta)
     por_categoria = basedatos.gastos_por_categoria(estado["periodo"])
@@ -362,15 +364,13 @@ def _gastos(page, estado, al_volver):
         "La compra de mercancía no va aquí: su costo ya se cuenta al vender. "
         "Para eso está «Entrada de mercancía» en el inventario."))
 
-    contenedor.content = ft.Column([
+    return ft.Column([
         _encabezado("Gastos", f"Operativos · {etiqueta.lower()}", estado,
                     recargar, al_volver),
         ft.Container(content=ft.Column(bloques, spacing=12, tight=True,
                                        scroll=ft.ScrollMode.AUTO),
                      padding=ft.Padding(14, 14, 14, 20), expand=True),
     ], spacing=0, expand=True)
-
-    return contenedor
 
 
 def _formulario_gasto(page, al_terminar):

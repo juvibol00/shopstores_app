@@ -18,6 +18,7 @@ from frontend import dialogos
 from frontend import estilo
 from backend import formato
 from frontend import paleta
+from frontend import pantalla
 
 POR_TANDA = 40
 
@@ -36,14 +37,8 @@ def _titulo_de_dia(dia):
 
 def crear_vista_historial(page, al_volver):
     estado = {"periodo": "mes", "tope": POR_TANDA}
-    contenedor = ft.Container(expand=True)
-
-    def repintar():
-        contenedor.content = _pantalla(page, estado, repintar, al_volver).content
-        page.update()
-
-    contenedor.content = _pantalla(page, estado, repintar, al_volver).content
-    return contenedor
+    return pantalla.repintable(
+        page, lambda repintar: _pantalla(page, estado, repintar, al_volver))
 
 
 def _rango(periodo):
@@ -108,8 +103,7 @@ def _pantalla(page, estado, repintar, al_volver):
             content=f"Ver más ({faltan} sin mostrar)", on_click=mas,
             style=ft.ButtonStyle(color=paleta.MARCA)))
 
-    contenedor = ft.Container(expand=True)
-    contenedor.content = ft.Column([
+    return ft.Column([
         estilo.encabezado(
             "Historial de ventas",
             f"{resumen['ventas']} venta(s) · {formato.dinero(resumen['ingreso'])}",
@@ -120,7 +114,6 @@ def _pantalla(page, estado, repintar, al_volver):
                                        scroll=ft.ScrollMode.AUTO),
                      padding=ft.Padding(14, 14, 14, 20), expand=True),
     ], spacing=0, expand=True)
-    return contenedor
 
 
 def _grupo(dia, ventas, page, repintar):

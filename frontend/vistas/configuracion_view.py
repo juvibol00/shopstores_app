@@ -16,6 +16,7 @@ from frontend import dialogos
 from frontend import estilo
 from backend import nube
 from frontend import paleta
+from frontend import pantalla
 from backend import seguridad
 
 
@@ -94,12 +95,13 @@ def _menu(page, funcion_volver, abrir):
 # ==========================================================================
 
 def _metodos(page, al_volver):
-    contenedor = ft.Container(expand=True)
+    return pantalla.repintable(
+        page, lambda repintar: _cuerpo_metodos(page, al_volver, repintar))
 
-    def recargar():
-        contenedor.content = _metodos(page, al_volver).content
-        page.update()
 
+def _cuerpo_metodos(page, al_volver, recargar):
+    """`recargar` es el de la pantalla montada: hay que usar **ese** y no armar uno
+    propio (ver `frontend/pantalla.py`)."""
     filas = []
     for m in basedatos.listar_metodos():
         filas.append(estilo.tarjeta(
@@ -121,7 +123,7 @@ def _metodos(page, al_volver):
             ], spacing=2),
             padding=(14, 8, 4, 8)))
 
-    contenedor.content = ft.Column([
+    return ft.Column([
         _cabecera("Métodos de pago", al_volver,
                   "Los que aparecen al cobrar"),
         ft.Container(content=ft.Column(filas + [
@@ -138,8 +140,6 @@ def _metodos(page, al_volver):
         ], spacing=10, tight=True, scroll=ft.ScrollMode.AUTO),
             padding=ft.Padding(14, 14, 14, 20), expand=True),
     ], spacing=0, expand=True)
-
-    return contenedor
 
 
 def _formulario_metodo(page, existente, al_terminar):
@@ -346,12 +346,14 @@ def _nube(page, al_volver):
     La pantalla dice siempre **cuanto falta por subir**: un respaldo del que no se
     sabe si esta al dia no tranquiliza a nadie.
     """
-    contenedor = ft.Container(expand=True)
-    estado = {"trabajando": False}
+    return pantalla.repintable(
+        page, lambda repintar: _cuerpo_nube(page, al_volver, repintar))
 
-    def recargar():
-        contenedor.content = _nube(page, al_volver).content
-        page.update()
+
+def _cuerpo_nube(page, al_volver, recargar):
+    """`recargar` es el de la pantalla montada: hay que usar **ese** y no armar uno
+    propio (ver `frontend/pantalla.py`)."""
+    estado = {"trabajando": False}
 
     cadena = ft.TextField(
         label="Cadena de conexion de Neon",
@@ -525,15 +527,13 @@ def _nube(page, al_volver):
         "PIN. La aplicacion funciona completa sin esto: el respaldo puede esperar, "
         "la venta no."))
 
-    contenedor.content = ft.Column([
+    return ft.Column([
         _cabecera("Respaldo en la nube", al_volver,
                   nube.host_guardado() or "Copia de seguridad en Neon"),
         ft.Container(content=ft.Column(bloques, spacing=12, tight=True,
                                        scroll=ft.ScrollMode.AUTO),
                      padding=ft.Padding(14, 16, 14, 20), expand=True),
     ], spacing=0, expand=True)
-
-    return contenedor
 
 
 def _olvidar_nube(page, al_terminar):

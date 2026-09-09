@@ -18,6 +18,7 @@ from frontend import estilo
 from backend import fotos
 from backend import formato
 from frontend import paleta
+from frontend import pantalla
 from frontend.vistas.catalogo_view import crear_vista_catalogo
 
 POR_TANDA = 40
@@ -31,8 +32,7 @@ def crear_vista_inventario(page, al_configurar_correo=None):
         page.update()
 
     def mostrar_ficha(producto_id):
-        contenedor.content = _ficha(page, producto_id, mostrar_lista,
-                                    lambda: mostrar_ficha(producto_id))
+        contenedor.content = _ficha(page, producto_id, mostrar_lista)
         page.update()
 
     def mostrar_catalogo():
@@ -185,27 +185,19 @@ def _lista(page, al_abrir, al_ver_catalogo):
 # Ficha
 # ==========================================================================
 
-def _ficha(page, producto_id, al_volver, al_recargar=None):
+def _ficha(page, producto_id, al_volver):
+    return pantalla.repintable(
+        page, lambda repintar: _cuerpo_ficha(page, producto_id, al_volver,
+                                             repintar))
+
+
+def _cuerpo_ficha(page, producto_id, al_volver, recargar):
+    """El contenido de la ficha. `recargar` es el de la pantalla montada: hay que
+    usar **ese** y no armar uno propio (ver `frontend/pantalla.py`)."""
     producto = basedatos.obtener_producto(producto_id)
     if producto is None:
         al_volver()
         return ft.Container()
-
-    contenedor = ft.Container(expand=True)
-
-    def recargar():
-        """Vuelve a montar la ficha entera, **desde arriba**.
-
-        Antes se reemplazaba el contenido de este contenedor por el de una ficha
-        nueva. El problema es que los botones de esa ficha nueva apuntan a *su*
-        contenedor, que nunca se monto: a partir de la segunda recarga se escribia
-        en una pantalla que no existe y no pasaba nada.
-        """
-        if al_recargar is not None:
-            al_recargar()
-        else:
-            contenedor.content = _ficha(page, producto_id, al_volver).content
-            page.update()
 
     galeria = ft.Row(spacing=8, wrap=True)
 
@@ -260,7 +252,7 @@ def _ficha(page, producto_id, al_volver, al_recargar=None):
             "el catálogo. Las ventas que ya se hicieron con él no se tocan.",
             "Borrar", lambda: _borrar(page, producto_id, al_volver), peligro=True)
 
-    contenedor.content = ft.Column([
+    return ft.Column([
         estilo.encabezado(
             producto["nombre"],
             f"{formato.dinero(precio)} · {formato.cantidad(stock)} en existencia",
@@ -305,8 +297,6 @@ def _ficha(page, producto_id, al_volver, al_recargar=None):
         ], spacing=12, tight=True, scroll=ft.ScrollMode.AUTO),
             padding=ft.Padding(14, 14, 14, 24), expand=True),
     ], spacing=0, expand=True)
-
-    return contenedor
 
 
 def _bloque(etiqueta, valor, color=None, tamano=15):
