@@ -32,9 +32,9 @@ ALTO_FILA = 36
 COLUMNA_TEXTO = 52
 CORTE_DE_PAGINA = 240
 
-MARRON = (139, 99, 64)      # #8B6340
-GRIS = (122, 110, 98)       # #7A6E62
-NEGRO = (46, 42, 38)        # #2E2A26
+MORADO = (107, 78, 155)     # #6B4E9B
+GRIS = (110, 102, 121)      # #6E6679
+NEGRO = (39, 34, 46)        # #27222E
 AMBAR = (201, 146, 46)      # #C9922E
 
 
@@ -58,7 +58,7 @@ def productos_del_catalogo(incluir_sin_stock):
 
 def _cabecera(pdf):
     pdf.set_font("Helvetica", "B", 20)
-    pdf.set_text_color(*MARRON)
+    pdf.set_text_color(*MORADO)
     pdf.cell(0, 12, "Catálogo", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
@@ -89,7 +89,7 @@ def armar(incluir_sin_stock=True):
         else:
             # Un hueco blanco desalinea la fila entera. Un recuadro beige con una
             # raya deja claro que ese producto todavía no tiene foto.
-            pdf.set_fill_color(227, 213, 191)
+            pdf.set_fill_color(220, 205, 240)
             pdf.rect(MARGEN, y, LADO_FOTO, LADO_FOTO, style="F")
             pdf.set_font("Helvetica", "", 7)
             pdf.set_text_color(*GRIS)
@@ -110,7 +110,7 @@ def armar(incluir_sin_stock=True):
         pdf.set_font("Helvetica", "B", 11)
         precio = f"$ {float(p['precio_usd']):,.2f}"
         if float(p["stock"]) > 0:
-            pdf.set_text_color(*MARRON)
+            pdf.set_text_color(*MORADO)
             pdf.cell(0, 6, precio, new_x="LMARGIN", new_y="NEXT")
         else:
             pdf.set_text_color(*AMBAR)
@@ -167,34 +167,34 @@ def cuerpo_html(a_pedido=0):
     """
     nota = ""
     if a_pedido:
-        nota = ('<p style="margin:14px 0 0;padding:12px 14px;background:#F2EADC;'
-                'border-radius:8px;color:#7A6E62;font-size:13px;line-height:1.6;">'
-                'Lo que aparece como <b style="color:#8B6340;">«A pedido»</b> no '
+        nota = ('<p style="margin:14px 0 0;padding:12px 14px;background:#F1EBFA;'
+                'border-radius:8px;color:#6E6679;font-size:13px;line-height:1.6;">'
+                'Lo que aparece como <b style="color:#6B4E9B;">«A pedido»</b> no '
                 'está en existencia ahora mismo: se consigue por encargo.</p>')
 
     return f"""<html><body style="margin:0;padding:24px 12px;
-background:#F2EADC;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
+background:#F1EBFA;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0"
        style="max-width:600px;background:#FFFFFF;border-radius:12px;">
 <tr><td style="padding:32px 34px 34px;">
 
-  <p style="margin:0;color:#8B6340;font-size:26px;font-weight:bold;
+  <p style="margin:0;color:#6B4E9B;font-size:26px;font-weight:bold;
             letter-spacing:.3px;">Catálogo</p>
-  <p style="margin:4px 0 0;color:#A69A8C;font-size:13px;">
+  <p style="margin:4px 0 0;color:#9A91A8;font-size:13px;">
     Actualizado el {formato.dia_largo(datetime.now().astimezone().date())}</p>
 
-  <div style="margin:24px 0 22px;border-top:1px solid #E3D5BF;"></div>
+  <div style="margin:24px 0 22px;border-top:1px solid #DCCDF0;"></div>
 
-  <p style="margin:0;color:#7A6E62;font-size:14px;line-height:1.6;">
+  <p style="margin:0;color:#6E6679;font-size:14px;line-height:1.6;">
     Saludos cordiales,<br><br>
     Adjunto va el catálogo actualizado, con los precios en dólares.
   </p>
 
   {nota}
 
-  <div style="margin:30px 0 14px;border-top:1px dashed #E3D5BF;"></div>
-  <p style="margin:0;color:#A69A8C;font-size:12px;line-height:1.6;
+  <div style="margin:30px 0 14px;border-top:1px dashed #DCCDF0;"></div>
+  <p style="margin:0;color:#9A91A8;font-size:12px;line-height:1.6;
             text-align:center;">
     Cualquier consulta, puedes responder a este correo.</p>
 

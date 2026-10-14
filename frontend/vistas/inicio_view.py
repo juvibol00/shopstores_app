@@ -63,7 +63,7 @@ def _encabezado(nombre, funcion_configuracion):
             ft.Row([
                 marca.logo(46),
                 ft.Column([
-                    ft.Text("Vane's Store", size=19, weight=estilo.FUERTE,
+                    ft.Text("ShopStore's", size=19, weight=estilo.FUERTE,
                             color=paleta.MARCA),
                     estilo.apunte("Gestión de ventas"),
                 ], spacing=0, tight=True, expand=True),
@@ -74,7 +74,7 @@ def _encabezado(nombre, funcion_configuracion):
             ft.Container(height=2),
             estilo.dato(f"Hola, {nombre}" if nombre else "Hola", size=15),
         ], spacing=6, tight=True),
-        bgcolor=paleta.BEIGE_CLARO,
+        bgcolor=paleta.LILA_CLARO,
         padding=ft.Padding(16, 14, 10, 16),
     )
 

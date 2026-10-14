@@ -152,7 +152,7 @@ def _cuerpo_ficha(page, cliente_id, al_volver, recargar):
                                     "No debe nada."))
 
     if abonos:
-        bloques.append(ft.Divider(height=16, color=paleta.BEIGE))
+        bloques.append(ft.Divider(height=16, color=paleta.LILA))
         bloques.append(estilo.seccion("Abonos recibidos"))
         for a in abonos:
             recibido = (formato.dinero(a["monto_recibido"])
@@ -207,7 +207,7 @@ def _dialogo_abono(page, cliente, saldo, al_terminar):
     estado = {"metodo": metodos[0]}
     monto = ft.TextField(label="Monto recibido", dense=True,
                          keyboard_type=ft.KeyboardType.NUMBER,
-                         border_color=paleta.BEIGE,
+                         border_color=paleta.LILA,
                          focused_border_color=paleta.MARCA)
     equivalente = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.TEXTO_SUAVE)
     reparto = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.TEXTO_SUAVE)
@@ -264,7 +264,7 @@ def _dialogo_abono(page, cliente, saldo, al_terminar):
 
     desplegable = ft.Dropdown(
         label="Cómo paga", value=metodos[0]["id"], dense=True,
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA,
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA,
         options=[ft.DropdownOption(key=m["id"], text=m["nombre"])
                  for m in metodos],
         on_select=elegir)   # en Flet 0.85.3 el evento es on_select
@@ -296,7 +296,7 @@ def _dialogo_abono(page, cliente, saldo, al_terminar):
         al_terminar()
 
     nota = ft.TextField(label="Nota (opcional)", dense=True,
-                        border_color=paleta.BEIGE,
+                        border_color=paleta.LILA,
                         focused_border_color=paleta.MARCA)
 
     dialogo = ft.AlertDialog(
@@ -367,7 +367,7 @@ def _lista_clientes(page, al_volver, al_abrir):
         recargar()
 
     buscador = ft.TextField(hint_text="Buscar cliente", dense=True,
-                            border_color=paleta.BEIGE,
+                            border_color=paleta.LILA,
                             focused_border_color=paleta.MARCA,
                             prefix_icon=ft.Icons.SEARCH, on_change=buscar,
                             bgcolor=paleta.TARJETA, border_radius=10)
@@ -392,16 +392,16 @@ def _lista_clientes(page, al_volver, al_abrir):
 def _formulario_cliente(page, existente, al_terminar):
     nombre = ft.TextField(label="Nombre",
                           value=existente["nombre"] if existente else "",
-                          border_color=paleta.BEIGE,
+                          border_color=paleta.LILA,
                           focused_border_color=paleta.MARCA)
     telefono = ft.TextField(label="Teléfono",
                             value=existente["telefono"] if existente else "",
                             keyboard_type=ft.KeyboardType.PHONE,
-                            border_color=paleta.BEIGE,
+                            border_color=paleta.LILA,
                             focused_border_color=paleta.MARCA)
     notas = ft.TextField(label="Notas",
                          value=existente["notas"] if existente else "",
-                         border_color=paleta.BEIGE,
+                         border_color=paleta.LILA,
                          focused_border_color=paleta.MARCA)
     problema = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.ERROR)
 

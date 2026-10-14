@@ -9,7 +9,7 @@ import shutil
 import sys
 import tempfile
 
-TEMPORAL = tempfile.mkdtemp(prefix="vanes_")
+TEMPORAL = tempfile.mkdtemp(prefix="shopstores_")
 os.environ["FLET_APP_STORAGE_DATA"] = TEMPORAL
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

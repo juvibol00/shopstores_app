@@ -6,7 +6,7 @@ import sys
 import tempfile
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-TEMPORAL = tempfile.mkdtemp(prefix="vanes_venta_")
+TEMPORAL = tempfile.mkdtemp(prefix="shopstores_venta_")
 os.environ["FLET_APP_STORAGE_DATA"] = TEMPORAL
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

@@ -1,4 +1,4 @@
-"""Corre todas las suites de prueba de Vane's Store.
+"""Corre todas las suites de prueba de ShopStore's.
 
     python pruebas/correr.py
 
@@ -18,7 +18,7 @@ SUITES = [
     ("Fase 3 · clientes y cobros", "probar_fase3.py"),
     ("Fase 4 · métricas y gastos", "probar_fase4.py"),
     ("Fase 5 · catálogo y cifrado", "probar_fase5.py"),
-    ("Fase 6 · respaldo en la nube", "probar_fase6.py"),
+    ("Fase 6 · respaldo en archivo", "probar_fase6.py"),
     ("Los botones hacen lo que dicen", "probar_botones.py"),
 ]
 

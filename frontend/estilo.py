@@ -113,7 +113,7 @@ def encabezado(titulo_texto, subtitulo_texto=None, al_volver=None, acciones=None
 
     return ft.Container(
         content=ft.Column(filas, spacing=12, tight=True),
-        bgcolor=paleta.BEIGE_CLARO,
+        bgcolor=paleta.LILA_CLARO,
         padding=ft.Padding(6 if al_volver else 16, 14, 12, 14),
     )
 
@@ -122,7 +122,7 @@ def vacio(icono, mensaje, detalle=None):
     """El estado sin datos. Con un icono en vez de una línea de texto suelta: una
     frase gris flotando en el fondo se lee como si la pantalla estuviera rota."""
     partes = [
-        ft.Icon(icono, color=paleta.BEIGE, size=40),
+        ft.Icon(icono, color=paleta.LILA, size=40),
         ft.Text(mensaje, size=13, weight=MEDIO, color=paleta.TEXTO_SUAVE,
                 text_align=ft.TextAlign.CENTER),
     ]
@@ -159,7 +159,7 @@ def pastillas(opciones, elegida, al_elegir, sobre_beige=False):
             fondo, color, borde = paleta.MARCA, paleta.FONDO, None
         elif sobre_beige:
             fondo, color = None, paleta.MARCA
-            lado = ft.BorderSide(1, paleta.BEIGE)
+            lado = ft.BorderSide(1, paleta.LILA)
             borde = ft.Border(lado, lado, lado, lado)
         else:
             fondo, color, borde = paleta.TARJETA, paleta.MARCA, None

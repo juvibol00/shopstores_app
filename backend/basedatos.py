@@ -6,14 +6,11 @@ se use:
 
 - **UUID como identidad**, no autonumericos: dos dispositivos pueden generar filas
   sin chocar.
-- **`sincronizado_en`** en cada tabla. `NULL` significa "falta empujar". No hace
-  falta una tabla de cola.
-- **Borrado logico** (`activo = 0`), nunca `DELETE`: una fila borrada de un lado
-  volveria a aparecer al sincronizar con el otro.
-- **El stock es la suma de `movimientos_inventario`**, y los movimientos son
-  relativos (`-3`, `+7`) y solo se agregan. Lo relativo se puede aplicar en
-  cualquier orden y da el mismo resultado. En SELL-B, una sola columna de stock
-  escrita en absoluto era el unico punto que rompia todo el diseno de dualidad.
+- **`sincronizado_en`** en cada tabla es una columna muerta. Venia del respaldo
+  en Neon, que se quito: ahora el respaldo es un archivo (ver `respaldo.py`) y la
+  base del telefono es la unica que existe. **No se borraron las columnas a
+  proposito**: sacarlas obliga a reescribir diez tablas en un telefono con datos
+  reales, y a cambio no se gana nada. Quedan siempre en NULL y nadie las lee.
 
 Las fechas se guardan en **ISO UTC**, no en hora local: el telefono puede tener la
 zona mal puesta y las comparaciones entre dispositivos tienen que cerrar.

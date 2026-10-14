@@ -12,12 +12,13 @@ import flet as ft
 
 from backend import basedatos
 from backend import correo
+from backend import formato
+from backend import seguridad
+from backend import respaldo
 from frontend import dialogos
 from frontend import estilo
-from backend import nube
 from frontend import paleta
 from frontend import pantalla
-from backend import seguridad
 
 
 def crear_vista_configuracion(page, funcion_volver):
@@ -34,8 +35,8 @@ def crear_vista_configuracion(page, funcion_volver):
             contenedor.content = _cambiar_pin(page, menu)
         elif cual == "correo":
             contenedor.content = _correo(page, menu)
-        elif cual == "nube":
-            contenedor.content = _nube(page, menu)
+        elif cual == "respaldo":
+            contenedor.content = _respaldo(page, menu)
         page.update()
 
     contenedor.content = _menu(page, funcion_volver, abrir)
@@ -57,7 +58,7 @@ def _tarjeta(titulo, detalle, al_tocar=None, pendiente=None):
         contenido.controls.append(
             ft.Container(content=ft.Text(pendiente, size=11, weight=estilo.MEDIO,
                                          color=paleta.MARCA),
-                         bgcolor=paleta.BEIGE_CLARO, border_radius=8,
+                         bgcolor=paleta.LILA_CLARO, border_radius=8,
                          padding=ft.Padding(9, 3, 9, 3)))
     else:
         contenido.controls.append(
@@ -79,8 +80,8 @@ def _menu(page, funcion_volver, abrir):
                      lambda e: abrir("pin")),
             _tarjeta("Tasa del día", "Se carga desde la pantalla de inicio",
                      pendiente="en Inicio"),
-            _tarjeta("Respaldo en la nube", _estado_nube(),
-                     lambda e: abrir("nube")),
+            _tarjeta("Respaldo", _estado_respaldo(),
+                     lambda e: abrir("respaldo")),
             _tarjeta("Correo del catálogo",
                      "Configurado" if correo.configurado()
                      else "Sin configurar",
@@ -145,10 +146,10 @@ def _cuerpo_metodos(page, al_volver, recargar):
 def _formulario_metodo(page, existente, al_terminar):
     nombre = ft.TextField(
         label="Nombre", value=existente["nombre"] if existente else "",
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     moneda = ft.Dropdown(
         label="Moneda", value=existente["moneda"] if existente else "Bs",
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA,
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA,
         options=[ft.DropdownOption(key="USD", text="Dólares"),
                  ft.DropdownOption(key="Bs", text="Bolívares")])
     problema = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.ERROR)
@@ -209,7 +210,7 @@ def _cambiar_pin(page, al_volver):
         return ft.TextField(label=etiqueta, password=True,
                             can_reveal_password=True,
                             keyboard_type=ft.KeyboardType.NUMBER,
-                            border_color=paleta.BEIGE,
+                            border_color=paleta.LILA,
                             focused_border_color=paleta.MARCA)
 
     actual = campo("PIN actual")
@@ -262,15 +263,15 @@ def _correo(page, al_volver):
     remitente = ft.TextField(
         label="Tu correo de Gmail", value=actual["remitente"],
         keyboard_type=ft.KeyboardType.EMAIL,
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     clave = ft.TextField(
         label="Clave de aplicación", value=actual["clave"] or "",
         password=True, can_reveal_password=True,
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     destino = ft.TextField(
         label="Destinatario habitual (opcional)", value=actual["destino"],
         keyboard_type=ft.KeyboardType.EMAIL,
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     problema = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.ERROR)
 
     aviso = []
@@ -327,223 +328,157 @@ def _correo(page, al_volver):
     ], spacing=0, expand=True)
 
 
+
 # ==========================================================================
-# El respaldo en la nube
+# El respaldo: toda la base en un archivo
 # ==========================================================================
 
-def _estado_nube():
-    if not nube.configurado():
-        return "Sin configurar"
-    faltan = nube.total_pendiente()
-    ultimo = nube.ultimo_respaldo()
-    cuando = f"ultimo el {ultimo[8:10]}/{ultimo[5:7]}" if ultimo else "nunca hecho"
-    return f"{cuando} - {faltan} sin subir" if faltan else f"{cuando} - al dia"
+def _estado_respaldo():
+    cuando = basedatos.leer_config("respaldo_ultimo", "")
+    if not cuando:
+        return "Nunca hecho"
+    dia = formato.dia_local(cuando)
+    return f"Último el {dia.strftime('%d/%m/%Y')}"
 
 
-def _nube(page, al_volver):
-    """La copia que sobrevive al telefono.
-
-    La pantalla dice siempre **cuanto falta por subir**: un respaldo del que no se
-    sabe si esta al dia no tranquiliza a nadie.
-    """
+def _respaldo(page, al_volver):
     return pantalla.repintable(
-        page, lambda repintar: _cuerpo_nube(page, al_volver, repintar))
+        page, lambda repintar: _cuerpo_respaldo(page, al_volver, repintar))
 
 
-def _cuerpo_nube(page, al_volver, recargar):
-    """`recargar` es el de la pantalla montada: hay que usar **ese** y no armar uno
-    propio (ver `frontend/pantalla.py`)."""
+def _cuerpo_respaldo(page, al_volver, recargar):
+    """Guardar la base en un archivo y volver a traerla.
+
+    Va por correo y no «guardar en el teléfono» porque la carpeta privada de la
+    aplicación **no la ve WhatsApp ni el explorador de archivos**: un respaldo que
+    no se puede sacar del teléfono no es un respaldo. Mandándotelo a ti misma
+    queda en el correo, que se abre desde cualquier parte.
+    """
     estado = {"trabajando": False}
+    configurado = correo.configurado()
+    destino = ft.TextField(
+        label="Mandármelo a", dense=True,
+        value=correo.leer_configuracion()["destino"]
+              or correo.leer_configuracion()["remitente"],
+        keyboard_type=ft.KeyboardType.EMAIL,
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
 
-    cadena = ft.TextField(
-        label="Cadena de conexion de Neon",
-        hint_text="postgresql://usuario:clave@ep-xxx.neon.tech/basededatos",
-        value=nube.leer_cadena() or "",
-        password=True, can_reveal_password=True,
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
-    problema = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.ERROR)
-    avance = estilo.apunte("")
-
-    def guardar(e):
-        problema.value = ""
-        try:
-            nube.guardar_cadena(cadena.value)
-        except nube.ErrorDeNube as ex:
-            problema.value = str(ex)
-            page.update()
-            return
-        dialogos.exito(page, "Conexion guardada.")
-        recargar()
-
-    def probar(e):
-        if estado["trabajando"]:
-            return
-        estado["trabajando"] = True
-        avance.value = "Conectando..."
-        page.update()
-
-        def trabajo():
-            version = nube.probar(cadena.value or None)
-            return True, f"Conectado: {version}"
-
-        def terminar():
-            estado["trabajando"] = False
-            avance.value = ""
-            page.update()
-
-        dialogos.en_segundo_plano(page, trabajo, terminar)
-
-    def respaldar(e):
+    def enviar(e):
         if estado["trabajando"]:
             return
 
-        def hacerlo():
+        def mandar():
             estado["trabajando"] = True
-            avance.value = "Subiendo..."
             page.update()
-
-            def informar(texto):
-                avance.value = f"Subiendo... {texto}"
-                page.update()
 
             def trabajo():
-                subidas = nube.respaldar(informar)
-                total = sum(subidas.values())
-                return True, (f"Respaldo al dia: {total} fila(s) subidas."
-                              if total else "Ya estaba todo respaldado.")
+                datos = respaldo.armar()
+                nombre = respaldo.nombre_sugerido()
+                correo.enviar_pdf(
+                    destino.value.strip(), datos, tipo="octet-stream",
+                    asunto=f"ShopStore's · Respaldo · {nombre[-13:-3]}",
+                    cuerpo="Adjunto va el respaldo de la aplicación.\n\n"
+                           "Guarda este correo: con ese archivo se recupera todo "
+                           "en un teléfono nuevo.",
+                    nombre_archivo=nombre)
+                basedatos.escribir_config("respaldo_ultimo", basedatos.ahora())
+                return True, f"Respaldo enviado a {destino.value.strip()}."
 
-            def terminar():
-                estado["trabajando"] = False
-                recargar()
+            dialogos.en_segundo_plano(page, trabajo, recargar)
 
-            dialogos.en_segundo_plano(page, trabajo, terminar)
-
-        faltan = nube.total_pendiente()
         dialogos.confirmar(
-            page, "Respaldar ahora",
-            (f"Se suben {faltan} fila(s) a la copia de la nube. "
-             f"Nada del telefono se modifica.") if faltan
-            else "No hay nada pendiente; se comprobara igual.",
-            "Respaldar", hacerlo)
+            page, "Enviar el respaldo",
+            "Va toda la base en un archivo: productos, fotos, ventas, clientes y "
+            "gastos. No lleva el PIN ni la clave del correo.",
+            "Enviar", mandar)
 
-    def restaurar(e):
-        if estado["trabajando"]:
-            return
-
-        def paso_dos(conteo):
-            arriba = sum(conteo.values())
-            productos = basedatos.contar_productos()
-            ventas = basedatos.contar_ventas()
-
-            def hacerlo():
-                estado["trabajando"] = True
-                avance.value = "Bajando..."
-                page.update()
-
-                def informar(texto):
-                    avance.value = f"Bajando... {texto}"
-                    page.update()
-
-                def trabajo():
-                    traidas = nube.restaurar(informar)
-                    return True, (f"Restaurado: {sum(traidas.values())} fila(s). "
-                                  f"Cierra y vuelve a abrir la aplicacion.")
-
-                def terminar():
-                    estado["trabajando"] = False
-                    recargar()
-
-                dialogos.en_segundo_plano(page, trabajo, terminar)
-
-            # Se dice exactamente que se pierde, con numeros. "Estas seguro?" no
-            # alcanza para algo que borra el inventario y las ventas.
-            dialogos.confirmar(
-                page, "Reemplazar todo lo del telefono",
-                f"Se BORRAN los {productos} producto(s) y las {ventas} venta(s) "
-                f"que hay en este telefono, y se escriben las {arriba} fila(s) de "
-                f"la copia. Esto no se puede deshacer.",
-                "Si, reemplazar", hacerlo, peligro=True)
-
-        estado["trabajando"] = True
-        avance.value = "Mirando que hay en la copia..."
+    async def elegir_archivo(e):
+        selector = ft.FilePicker()
+        page.services.append(selector)
         page.update()
+        try:
+            archivos = await selector.pick_files(
+                dialog_title="Elige el archivo del respaldo", with_data=True)
+        except Exception as ex:
+            dialogos.error(page, f"No se pudo abrir el explorador: {ex}")
+            return
+        finally:
+            page.services.remove(selector)
+        if not archivos:
+            return
+        _confirmar_restauracion(page, archivos[0].bytes, recargar)
 
-        resultado = {}
+    bloques = [
+        estilo.tarjeta(ft.Column([
+            estilo.seccion("Lo que hay ahora"),
+            estilo.dato(f"{basedatos.contar_productos()} producto(s) · "
+                        f"{basedatos.contar_ventas()} venta(s)", size=14),
+            estilo.apunte(_estado_respaldo().lower()),
+        ], spacing=4, tight=True)),
+    ]
 
-        def trabajo():
-            resultado["conteo"] = nube.resumen_de_la_copia()
-            return True, None      # sin aviso: el paso siguiente es el dialogo
-
-        def terminar():
-            estado["trabajando"] = False
-            avance.value = ""
-            page.update()
-            if "conteo" in resultado:
-                paso_dos(resultado["conteo"])
-
-        dialogos.en_segundo_plano(page, trabajo, terminar)
-
-    faltan = nube.pendientes()
-    ultimo = nube.ultimo_respaldo()
-
-    bloques = [cadena, problema,
-               ft.Row([
-                   estilo.boton("Guardar", guardar, expand=True),
-                   estilo.boton("Probar conexion", probar, principal=False,
-                                expand=True),
-               ], spacing=8),
-               avance]
-
-    if nube.configurado():
-        detalle = [estilo.seccion("Estado del respaldo"),
-                   estilo.dato(f"Ultimo: {ultimo[:16].replace(chr(84), chr(32))}"
-                               if ultimo else "Nunca se ha respaldado", size=13)]
-        if faltan:
-            detalle.append(estilo.apunte(
-                " - ".join(f"{tabla}: {n}" for tabla, n in faltan.items())))
-            detalle.append(estilo.dato(f"{sum(faltan.values())} fila(s) sin subir",
-                                       size=13, color=paleta.AVISO))
-        else:
-            detalle.append(estilo.dato("Todo subido", size=13, color=paleta.OK))
-
+    if configurado:
         bloques += [
-            estilo.tarjeta(ft.Column(detalle, spacing=4, tight=True),
-                           color_borde=paleta.AVISO if faltan else None),
-            estilo.boton("Respaldar ahora", respaldar, ancho=400, alto=46),
-            ft.Divider(height=16, color=paleta.BEIGE),
-            estilo.seccion("Telefono nuevo"),
-            estilo.apunte("Restaurar trae la copia y reemplaza todo lo que haya "
-                          "en este telefono. Es para empezar en un equipo nuevo, "
-                          "no para mezclar."),
-            ft.TextButton(content="Restaurar desde la nube", on_click=restaurar,
-                          style=ft.ButtonStyle(color=paleta.ERROR)),
-            ft.TextButton(content="Olvidar esta conexion",
-                          on_click=lambda e: _olvidar_nube(page, recargar),
-                          style=ft.ButtonStyle(color=paleta.TEXTO_SUAVE)),
+            destino,
+            estilo.boton("Enviar el respaldo por correo", enviar,
+                         ancho=400, alto=46),
         ]
+    else:
+        bloques.append(estilo.tarjeta(
+            ft.Column([
+                estilo.dato("Falta configurar el correo", size=13,
+                            color=paleta.AVISO),
+                estilo.apunte("Es por donde sale el respaldo del teléfono."),
+            ], spacing=2, tight=True),
+            padding=(12, 10, 12, 10), color_borde=paleta.AVISO))
 
-    bloques.append(estilo.apunte(
-        "La cadena lleva la contrasena adentro, asi que se guarda cifrada con tu "
-        "PIN. La aplicacion funciona completa sin esto: el respaldo puede esperar, "
-        "la venta no."))
+    bloques += [
+        ft.Divider(height=16, color=paleta.LILA),
+        estilo.seccion("Teléfono nuevo"),
+        estilo.apunte("Restaurar trae el archivo y reemplaza todo lo que haya en "
+                      "este teléfono. Es para empezar en un equipo nuevo, no para "
+                      "mezclar."),
+        ft.TextButton(content="Restaurar desde un archivo", on_click=elegir_archivo,
+                      style=ft.ButtonStyle(color=paleta.ERROR)),
+        ft.Container(height=4),
+        estilo.apunte("El archivo no lleva el PIN ni la clave del correo: están "
+                      "cifradas con una llave de este teléfono y en otro no "
+                      "servirían. Se vuelven a escribir una vez."),
+    ]
 
     return ft.Column([
-        _cabecera("Respaldo en la nube", al_volver,
-                  nube.host_guardado() or "Copia de seguridad en Neon"),
+        _cabecera("Respaldo", al_volver, "Toda la base en un archivo"),
         ft.Container(content=ft.Column(bloques, spacing=12, tight=True,
                                        scroll=ft.ScrollMode.AUTO),
                      padding=ft.Padding(14, 16, 14, 20), expand=True),
     ], spacing=0, expand=True)
 
 
-def _olvidar_nube(page, al_terminar):
-    def borrar():
-        nube.olvidar()
-        dialogos.exito(page, "Conexion borrada de este telefono.")
+def _confirmar_restauracion(page, datos, al_terminar):
+    """Dice qué trae el archivo **antes** de reemplazar nada.
+
+    Restaurar no se deshace, y el error típico no es elegir un archivo roto sino
+    elegir uno viejo. Ver «12 productos, 3 ventas» cuando hoy tienes 40 es lo que
+    hace que la persona se detenga a tiempo.
+    """
+    try:
+        resumen = respaldo.revisar(datos)
+    except respaldo.ErrorDeRespaldo as ex:
+        dialogos.error(page, str(ex))
+        return
+
+    def hacerlo():
+        try:
+            respaldo.restaurar(datos)
+        except respaldo.ErrorDeRespaldo as ex:
+            dialogos.error(page, str(ex))
+            return
+        dialogos.exito(page, "Respaldo restaurado.")
         al_terminar()
 
     dialogos.confirmar(
-        page, "Olvidar la conexion",
-        "Se borra la cadena de este telefono. La copia que ya esta en la nube no "
-        "se toca.",
-        "Olvidar", borrar, peligro=True)
+        page, "Restaurar este respaldo",
+        f"El archivo trae {resumen['productos']} producto(s), "
+        f"{resumen['ventas']} venta(s) y {resumen['clientes']} cliente(s). "
+        f"Todo lo que hay hoy en el teléfono se reemplaza por eso.",
+        "Restaurar", hacerlo, peligro=True)

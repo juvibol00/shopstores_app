@@ -1,7 +1,7 @@
 [project]
-name = "vanes-store"
+name = "shopstores"
 version = "0.1.0"
-description = "Vane's Store — gestion de ventas movil"
+description = "ShopStore's — gestion de ventas movil"
 requires-python = ">=3.10"
 
 # Clavado a proposito, con lo aprendido en la Fase 0:
@@ -25,18 +25,16 @@ requires-python = ">=3.10"
 #
 # `sqlite3`, `hashlib` y `smtplib` son biblioteca estandar: la base, el PIN y el
 # envio del correo no agregan dependencia.
-# - `pg8000` habla con Neon. Tambien es `py3-none-any`.
 dependencies = [
     "flet==0.85.3",
     "pillow==12.2.0",
     "fpdf2==2.8.8",
     "cryptography==43.0.1",
-    "pg8000==1.31.5",
 ]
 
 [tool.flet]
 org = "com.bolivarsoftware"
-product = "Vane's Store"
+product = "ShopStore's"
 company = "Bolivar Software Company"
 
 [tool.flet.app]
@@ -44,7 +42,7 @@ company = "Bolivar Software Company"
 module = "main"
 
 [tool.flet.android]
-package = "com.bolivarsoftware.vanesstore"
+package = "com.bolivarsoftware.shopstore"
 
 [tool.flet.android.permission]
 "android.permission.INTERNET" = true

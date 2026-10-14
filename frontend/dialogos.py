@@ -197,7 +197,7 @@ def pedir_numero(page, titulo, explicacion, etiqueta_campo, valor_inicial,
 
     campo = ft.TextField(label=etiqueta_campo, value=str(valor_inicial),
                          keyboard_type=ft.KeyboardType.NUMBER,
-                         border_color=paleta.BEIGE,
+                         border_color=paleta.LILA,
                          focused_border_color=paleta.MARCA)
 
     def al_escribir(e):

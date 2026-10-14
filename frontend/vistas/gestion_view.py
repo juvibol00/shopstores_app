@@ -112,7 +112,7 @@ def _grafico(serie):
             ft.Container(height=ALTO - alto_total),
             ft.Container(height=alto_ganancia, bgcolor=paleta.OK,
                          border_radius=3, width=18),
-            ft.Container(height=alto_costo, bgcolor=paleta.BEIGE, width=18),
+            ft.Container(height=alto_costo, bgcolor=paleta.LILA, width=18),
             estilo.apunte(DIAS[d["dia"].weekday()], size=10),
         ], spacing=0, tight=True,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER))
@@ -126,7 +126,7 @@ def _grafico(serie):
                 ft.Container(width=10, height=10, bgcolor=paleta.OK,
                              border_radius=2),
                 estilo.apunte("ganancia", size=10),
-                ft.Container(width=10, height=10, bgcolor=paleta.BEIGE,
+                ft.Container(width=10, height=10, bgcolor=paleta.LILA,
                              border_radius=2),
                 estilo.apunte("costo", size=10),
             ], spacing=5),
@@ -237,10 +237,10 @@ def _resumen(page, estado, al_cambiar, al_ver_gastos):
         ft.Column([
             _linea("Ingresos", m["vendido"]),
             _linea("Costo de lo vendido", m["costo"], signo="− "),
-            ft.Divider(height=10, color=paleta.BEIGE),
+            ft.Divider(height=10, color=paleta.LILA),
             _linea("Ganancia bruta", m["bruta"], color=paleta.TEXTO, tamano=15),
             _linea("Gastos", m["gastos"], signo="− "),
-            ft.Divider(height=10, color=paleta.BEIGE),
+            ft.Divider(height=10, color=paleta.LILA),
             _linea("Ganancia neta", m["neta"],
                    color=paleta.OK if m["neta"] >= 0 else paleta.ERROR, tamano=17),
         ], spacing=8, tight=True)))
@@ -317,7 +317,7 @@ def _cuerpo_gastos(page, estado, al_volver, recargar):
                 estilo.apunte(f"{c['veces']}×"),
                 estilo.dato(formato.dinero(c["total"]), size=13, color=paleta.MARCA),
             ], spacing=8) for c in por_categoria]
-            + [ft.Divider(height=10, color=paleta.BEIGE),
+            + [ft.Divider(height=10, color=paleta.LILA),
                ft.Row([
                    estilo.seccion("Total"),
                    ft.Container(expand=True),
@@ -377,21 +377,21 @@ def _formulario_gasto(page, al_terminar):
     tasa = basedatos.leer_tasa()
     usadas = basedatos.categorias_de_gasto()
 
-    categoria = ft.TextField(label="Categoría", border_color=paleta.BEIGE,
+    categoria = ft.TextField(label="Categoría", border_color=paleta.LILA,
                              focused_border_color=paleta.MARCA)
     sugerencias = ft.Row(spacing=6, wrap=True)
     descripcion = ft.TextField(label="Descripción (opcional)", dense=True,
-                               border_color=paleta.BEIGE,
+                               border_color=paleta.LILA,
                                focused_border_color=paleta.MARCA)
     # Sin `expand`, el campo del monto se estira más allá del diálogo y tapa el
     # desplegable de la moneda. Los dos reparten el ancho en proporción 3 a 2.
     monto = ft.TextField(label="Monto", dense=True, expand=3,
                          keyboard_type=ft.KeyboardType.NUMBER,
-                         border_color=paleta.BEIGE,
+                         border_color=paleta.LILA,
                          focused_border_color=paleta.MARCA)
     moneda = ft.Dropdown(
         label="Moneda", value="USD", dense=True, expand=2,
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA,
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA,
         options=[ft.DropdownOption(key="USD", text="Dólares"),
                  ft.DropdownOption(key="Bs", text="Bolívares")])
     equivalente = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.TEXTO_SUAVE)
@@ -427,7 +427,7 @@ def _formulario_gasto(page, al_terminar):
         sugerencias.controls.append(ft.Container(
             content=ft.Text(nombre, size=11, weight=estilo.MEDIO,
                             color=paleta.MARCA),
-            bgcolor=paleta.BEIGE_CLARO, border_radius=12,
+            bgcolor=paleta.LILA_CLARO, border_radius=12,
             padding=ft.Padding(10, 4, 10, 4),
             on_click=lambda e, n=nombre: poner(n)))
 

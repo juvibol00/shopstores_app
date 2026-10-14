@@ -1,4 +1,4 @@
-"""Vane's Store — app movil de gestion de ventas. El arranque.
+"""ShopStore's — app movil de gestion de ventas. El arranque.
 
 El codigo esta partido en dos, igual que SELL-B:
 
@@ -38,7 +38,7 @@ SECCIONES = {
 ORDEN = ["inicio", "venta", "inventario", "cobros", "metricas"]
 
 def _armar(page: ft.Page):
-    page.title = "Vane's Store"
+    page.title = "ShopStore's"
     page.bgcolor = paleta.FONDO
     page.padding = 0
     page.theme_mode = ft.ThemeMode.LIGHT
@@ -82,7 +82,7 @@ def _armar(page: ft.Page):
         barra["control"] = ft.NavigationBar(
             selected_index=0,
             bgcolor=paleta.TARJETA,
-            indicator_color=paleta.BEIGE,
+            indicator_color=paleta.LILA,
             destinations=[
                 ft.NavigationBarDestination(icon=SECCIONES[n][0],
                                             label=SECCIONES[n][1])

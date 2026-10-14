@@ -76,7 +76,7 @@ def _pantalla_venta(page, funcion_navegar, al_ver_historial):
     resultados = ft.Column(spacing=6, tight=True, visible=False)
     lineas = ft.Column(spacing=8, tight=True)
     volver_al_carrito = ft.Container(
-        visible=False, bgcolor=paleta.BEIGE_CLARO, border_radius=10,
+        visible=False, bgcolor=paleta.LILA_CLARO, border_radius=10,
         padding=ft.Padding(12, 10, 12, 10))
     bloque_cobro = ft.Column(spacing=12, tight=True)
     filas_pago = ft.Column(spacing=8, tight=True)
@@ -95,7 +95,7 @@ def _pantalla_venta(page, funcion_navegar, al_ver_historial):
 
     interruptor = ft.Switch(label="Vender a crédito", active_color=paleta.MARCA)
     selector_cliente = ft.Dropdown(
-        label="Cliente", dense=True, border_color=paleta.BEIGE,
+        label="Cliente", dense=True, border_color=paleta.LILA,
         focused_border_color=paleta.MARCA, options=[])
     texto_vence = estilo.apunte("Sin fecha de pago", size=12)
     caja_pago = ft.Column(spacing=10, tight=True)
@@ -103,7 +103,7 @@ def _pantalla_venta(page, funcion_navegar, al_ver_historial):
 
     buscador = ft.TextField(
         hint_text="Buscar o ver todos los productos", dense=True,
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA,
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA,
         bgcolor=paleta.TARJETA, border_radius=10,
         prefix_icon=ft.Icons.SEARCH)
 
@@ -210,7 +210,7 @@ def _pantalla_venta(page, funcion_navegar, al_ver_historial):
     def _campo_monto():
         return ft.TextField(dense=True, width=124, label="Monto",
                             keyboard_type=ft.KeyboardType.NUMBER,
-                            border_color=paleta.BEIGE,
+                            border_color=paleta.LILA,
                             focused_border_color=paleta.MARCA,
                             on_change=lambda ev: refrescar_pago())
 
@@ -253,7 +253,7 @@ def _pantalla_venta(page, funcion_navegar, al_ver_historial):
         for pago in pagos:
             desplegable = ft.Dropdown(
                 value=pago["metodo_id"], dense=True, expand=True, text_size=13,
-                border_color=paleta.BEIGE, focused_border_color=paleta.MARCA,
+                border_color=paleta.LILA, focused_border_color=paleta.MARCA,
                 options=[ft.DropdownOption(key=m["id"], text=m["nombre"])
                          for m in metodos],
                 # En Flet 0.85.3 el evento es `on_select`, no `on_change`.
@@ -548,7 +548,7 @@ def _pantalla_venta(page, funcion_navegar, al_ver_historial):
                 ], spacing=0, tight=True, expand=True),
                 contador,
             ], vertical_alignment=ft.CrossAxisAlignment.END),
-            ft.Divider(height=14, color=paleta.BEIGE),
+            ft.Divider(height=14, color=paleta.LILA),
             interruptor,
             caja_pago,
             caja_credito,
@@ -584,7 +584,7 @@ def _fila_resultado(producto, al_agregar):
                               color=paleta.ERROR if sin_stock else None),
             ], spacing=1, tight=True, expand=True),
             ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE,
-                    color=paleta.BEIGE if sin_stock else paleta.MARCA, size=22),
+                    color=paleta.LILA if sin_stock else paleta.MARCA, size=22),
         ], spacing=8),
         padding=(12, 8, 12, 8),
         al_tocar=None if sin_stock else (lambda e: al_agregar(producto)))
@@ -613,11 +613,11 @@ def _linea_carrito(producto_id, linea, al_cambiar, al_quitar):
 def _formulario_cliente_rapido(page, al_terminar):
     """Alta de cliente sin salir de la venta. Solo el nombre y el teléfono: el
     resto se completa después, en Cobros."""
-    nombre = ft.TextField(label="Nombre", border_color=paleta.BEIGE,
+    nombre = ft.TextField(label="Nombre", border_color=paleta.LILA,
                           focused_border_color=paleta.MARCA)
     telefono = ft.TextField(label="Teléfono (opcional)", dense=True,
                             keyboard_type=ft.KeyboardType.PHONE,
-                            border_color=paleta.BEIGE,
+                            border_color=paleta.LILA,
                             focused_border_color=paleta.MARCA)
     problema = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.ERROR)
 

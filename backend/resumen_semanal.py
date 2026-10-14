@@ -27,9 +27,9 @@ from backend import basedatos
 from backend import formato
 from backend import correo
 
-MARRON = (139, 99, 64)
-GRIS = (122, 110, 98)
-NEGRO = (46, 42, 38)
+MORADO = (107, 78, 155)
+GRIS = (110, 102, 121)
+NEGRO = (39, 34, 46)
 VERDE = (74, 124, 89)
 ROJO = (180, 83, 75)
 
@@ -90,7 +90,7 @@ def armar_pdf(d=None):
     pdf.add_page()
 
     pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(*MARRON)
+    pdf.set_text_color(*MORADO)
     pdf.cell(0, 10, "Resumen de la semana", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*GRIS)
@@ -107,7 +107,7 @@ def armar_pdf(d=None):
 
     def raya():
         y = pdf.get_y() + 1
-        pdf.set_draw_color(227, 213, 191)
+        pdf.set_draw_color(220, 205, 240)
         pdf.line(15, y, 195, y)
         pdf.ln(3)
 
@@ -185,7 +185,7 @@ def cuerpo_texto(d):
         "va en el PDF adjunto.",
         "",
         "--",
-        "Mensaje generado automáticamente por Vane's Store.",
+        "Mensaje generado automáticamente por ShopStore's.",
         "No hace falta responder a esta dirección.",
         "Bolívar Software Company.",
     ])
@@ -199,10 +199,10 @@ def cuerpo_html(d):
     leer dos veces lo mismo, y un correo largo en el teléfono se recorre sin
     leerse. El correo presenta; el PDF informa.
     """
-    raya = "border-top:1px solid #E3D5BF;"
+    raya = "border-top:1px solid #DCCDF0;"
 
     return f"""<html><body style="margin:0;padding:24px 12px;
-background:#F2EADC;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
+background:#F1EBFA;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0"
        style="max-width:600px;background:#FFFFFF;border-radius:12px;">
@@ -214,31 +214,31 @@ background:#F2EADC;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
            style="display:block;border-radius:11px;">
     </td>
     <td>
-      <p style="margin:0;color:#8B6340;font-size:19px;font-weight:bold;
-                letter-spacing:.3px;">Vane's Store</p>
-      <p style="margin:2px 0 0;color:#A69A8C;font-size:12px;">
+      <p style="margin:0;color:#6B4E9B;font-size:19px;font-weight:bold;
+                letter-spacing:.3px;">ShopStore's</p>
+      <p style="margin:2px 0 0;color:#9A91A8;font-size:12px;">
         Resumen semanal</p>
     </td>
   </tr></table>
 
   <div style="margin:26px 0 22px;{raya}"></div>
 
-  <p style="margin:0;color:#2E2A26;font-size:21px;font-weight:bold;">
+  <p style="margin:0;color:#27222E;font-size:21px;font-weight:bold;">
     Resumen de la semana</p>
-  <p style="margin:4px 0 22px;color:#7A6E62;font-size:14px;">{d['titulo']}</p>
+  <p style="margin:4px 0 22px;color:#6E6679;font-size:14px;">{d['titulo']}</p>
 
-  <p style="margin:0;color:#7A6E62;font-size:14px;line-height:1.6;">
+  <p style="margin:0;color:#6E6679;font-size:14px;line-height:1.6;">
     Saludos cordiales,<br><br>
     Este es el cierre de la semana pasada. El detalle completo va en el PDF
     adjunto.
   </p>
 
-  <div style="margin:30px 0 14px;border-top:1px dashed #E3D5BF;"></div>
-  <p style="margin:0;color:#A69A8C;font-size:11px;line-height:1.6;
+  <div style="margin:30px 0 14px;border-top:1px dashed #DCCDF0;"></div>
+  <p style="margin:0;color:#9A91A8;font-size:11px;line-height:1.6;
             text-align:center;">
-    Mensaje generado automáticamente por Vane's Store.<br>
+    Mensaje generado automáticamente por ShopStore's.<br>
     No hace falta responder a esta dirección.<br>
-    <span style="color:#C4B8A8;">Bolívar Software Company</span>
+    <span style="color:#B8AEC6;">Bolívar Software Company</span>
   </p>
 
 </td></tr></table>
@@ -271,7 +271,7 @@ def enviar(destino=None):
                or correo.leer_configuracion()["remitente"])
     correo.enviar_pdf(
         destino, armar_pdf(d),
-        asunto=f"Vane's Store · Resumen de la semana · {d['titulo']}",
+        asunto=f"ShopStore's · Resumen de la semana · {d['titulo']}",
         cuerpo=cuerpo_texto(d),
         html=cuerpo_html(d),
         logo=_logo(),

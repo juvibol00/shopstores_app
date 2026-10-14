@@ -21,7 +21,7 @@ def _campo_pin(etiqueta, al_enviar=None):
         can_reveal_password=True,
         keyboard_type=ft.KeyboardType.NUMBER,
         text_align=ft.TextAlign.CENTER,
-        border_color=paleta.BEIGE,
+        border_color=paleta.LILA,
         focused_border_color=paleta.MARCA,
         on_submit=al_enviar,
     )
@@ -48,7 +48,7 @@ def crear_vista_pin(page, al_entrar):
 # --------------------------------------------------------------------------
 
 def _configurar(page, al_entrar):
-    nombre = ft.TextField(label="Tu nombre", border_color=paleta.BEIGE,
+    nombre = ft.TextField(label="Tu nombre", border_color=paleta.LILA,
                           focused_border_color=paleta.MARCA)
     pin = _campo_pin("PIN de 6 dígitos")
     repetir = _campo_pin("Repetir PIN")
@@ -83,7 +83,7 @@ def _configurar(page, al_entrar):
     return ft.Container(
         content=ft.Column([
             marca.logo(88),
-            ft.Text("Vane's Store", size=24, weight=estilo.FUERTE,
+            ft.Text("ShopStore's", size=24, weight=estilo.FUERTE,
                     color=paleta.MARCA),
             ft.Text("Primer arranque: elige cómo vas a entrar.",
                     size=13, color=paleta.TEXTO_SUAVE,
@@ -125,7 +125,7 @@ def _desbloquear(page, al_entrar):
     return ft.Container(
         content=ft.Column([
             marca.logo(88),
-            ft.Text(f"Hola, {nombre}" if nombre else "Vane's Store",
+            ft.Text(f"Hola, {nombre}" if nombre else "ShopStore's",
                     size=22, weight=estilo.FUERTE, color=paleta.MARCA),
             _marco([
                 pin, aviso,

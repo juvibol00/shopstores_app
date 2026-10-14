@@ -36,3 +36,9 @@ Thumbs.db
 # Las claves nunca entran al repositorio
 .env
 *.env
+
+# El APK que baja uno desde Actions para instalarlo. Es una salida de la
+# compilacion, no codigo: pesa megas y se vuelve a generar cuando haga falta.
+*.apk
+*-APK/
+*-APK.zip

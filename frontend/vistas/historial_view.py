@@ -175,7 +175,7 @@ def ver_venta(page, venta_id, correlativo, recargar):
     ]) for l in lineas]
 
     if pagos:
-        detalle.append(ft.Divider(height=12, color=paleta.BEIGE))
+        detalle.append(ft.Divider(height=12, color=paleta.LILA))
         detalle.append(estilo.seccion("Pagó con"))
         for p in pagos:
             detalle.append(ft.Row([
@@ -207,7 +207,7 @@ def ver_venta(page, venta_id, correlativo, recargar):
         modal=True,
         title=estilo.dato(f"Venta N° {correlativo}", size=16),
         content=ft.Column(detalle + [
-            ft.Divider(height=14, color=paleta.BEIGE),
+            ft.Divider(height=14, color=paleta.LILA),
             ft.Row([
                 estilo.seccion("Total"),
                 ft.Container(expand=True),

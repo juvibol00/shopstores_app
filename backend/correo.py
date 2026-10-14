@@ -70,8 +70,8 @@ def olvidar_configuracion():
         almacenamiento.borrar(clave)
 
 
-def armar_mensaje(remitente, destino, asunto, pdf, nombre_archivo,
-                  cuerpo=None, html=None, logo=None):
+def armar_mensaje(remitente, destino, asunto, adjunto, nombre_archivo,
+                  cuerpo=None, html=None, logo=None, tipo="pdf"):
     """Arma el correo. Aparte del envío, para poder revisarlo sin mandar nada.
 
     **El orden importa**: primero el texto, después la versión con formato y su
@@ -90,17 +90,19 @@ def armar_mensaje(remitente, destino, asunto, pdf, nombre_archivo,
         if logo:
             mensaje.get_payload()[1].add_related(
                 logo, "image", "png", cid=f"<{identificador}>")
-    mensaje.add_attachment(pdf, maintype="application", subtype="pdf",
+    mensaje.add_attachment(adjunto, maintype="application", subtype=tipo,
                            filename=nombre_archivo)
     return mensaje
 
 
 def enviar_pdf(destino, pdf, asunto="Catálogo", cuerpo=None,
-               nombre_archivo="catalogo.pdf", html=None, logo=None):
+               nombre_archivo="catalogo.pdf", html=None, logo=None,
+               tipo="pdf"):
     """Manda un PDF adjunto. Lanza `ErrorDeCorreo` con un texto para mostrar.
 
-    Sirve para el catálogo y para el resumen semanal: lo único que cambia es el
-    asunto, el cuerpo y el nombre del archivo.
+    Sirve para el catálogo, para el resumen semanal y para el respaldo de la
+    base: lo único que cambia es el asunto, el cuerpo, el nombre del archivo y
+    `tipo`, que es lo que el programa de correo usa para saber qué adjuntó.
 
     Con `html` el correo sale en dos versiones: la de texto que ya estaba y una
     con formato. Cada programa de correo elige la que sabe mostrar, así que la de
@@ -125,7 +127,7 @@ def enviar_pdf(destino, pdf, asunto="Catálogo", cuerpo=None,
                             "Vuelve a escribirla en Configuración.")
 
     mensaje = armar_mensaje(config["remitente"], destino, asunto, pdf,
-                            nombre_archivo, cuerpo, html, logo)
+                            nombre_archivo, cuerpo, html, logo, tipo)
 
     try:
         with smtplib.SMTP_SSL(SERVIDOR, PUERTO, timeout=ESPERA) as servidor:

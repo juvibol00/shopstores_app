@@ -6,7 +6,7 @@ import sys
 import tempfile
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-TEMPORAL = tempfile.mkdtemp(prefix="vanes_catalogo_")
+TEMPORAL = tempfile.mkdtemp(prefix="shopstores_catalogo_")
 os.environ["FLET_APP_STORAGE_DATA"] = TEMPORAL
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -32,7 +32,7 @@ def texto_del_pdf(pdf):
     """El texto de un PDF, descomprimido.
 
     fpdf2 comprime los flujos con zlib, así que buscar los bytes crudos en el
-    archivo NO prueba nada: un `b"Vane" not in pdf` pasa siempre, aunque el nombre
+    archivo NO prueba nada: un `b"Shop" not in pdf` pasa siempre, aunque el nombre
     esté ahí. Hay que descomprimir para comprobar de verdad.
     """
     import zlib
@@ -147,7 +147,7 @@ check(cuantos == 3 and paginas == 1, "3 productos en 1 página")
 texto = texto_del_pdf(pdf)
 check(b"Cartera" in texto, "el texto se puede leer descomprimido")
 check(b"No mostrar" not in texto, "el producto excluido no aparece")
-check(b"Vane" not in texto and b"Vane" not in pdf,
+check(b"Shop" not in texto and b"Shop" not in pdf,
       "el nombre del negocio NO aparece, ni comprimido ni en claro")
 check(b"A pedido" in texto, "el agotado sale marcado A pedido")
 check(b"Cat" in texto, "el encabezado dice Catálogo")
@@ -194,7 +194,7 @@ html = resumen_semanal.cuerpo_html(d)
 
 check("Saludos cordiales" in texto and "Bolívar Software Company" in texto,
       "la versión de texto saluda y firma")
-check("Vane's Store" in html and "Resumen de la semana" in html,
+check("ShopStore's" in html and "Resumen de la semana" in html,
       "la versión con formato lleva el nombre del negocio y el título")
 check("<table" in html and "cellpadding" in html,
       "va armado con tablas, que es lo que respetan los correos")
@@ -249,12 +249,12 @@ html_cat = catalogo.cuerpo_html(0)
 
 check("Saludos cordiales" in texto_cat and "Catálogo" in html_cat,
       "saluda y se presenta como catálogo")
-check("Vane" not in html_cat and "Vane" not in texto_cat,
+check("Shop" not in html_cat and "Shop" not in texto_cat,
       "va SIN el nombre del negocio, igual que el PDF")
 check("no responder" not in html_cat.lower()
       and "responder a este correo" in html_cat,
       "y aquí sí se invita a responder: es un correo a un cliente")
-check("#F2EADC" in html_cat and "#8B6340" in html_cat,
+check("#F1EBFA" in html_cat and "#6B4E9B" in html_cat,
       "usa la misma paleta que el del resumen semanal")
 
 check("A pedido" not in catalogo.cuerpo_html(0),

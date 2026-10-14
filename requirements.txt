@@ -2,4 +2,3 @@ flet==0.85.3
 pillow==12.2.0
 fpdf2==2.8.8
 cryptography==43.0.1
-pg8000==1.31.5

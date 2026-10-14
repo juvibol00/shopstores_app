@@ -16,7 +16,7 @@ BASE = os.environ.get("FLET_APP_STORAGE_DATA") or os.path.join(
 
 os.makedirs(BASE, exist_ok=True)
 
-RUTA_BASE_DATOS = os.path.join(BASE, "vanesstore.db")
+RUTA_BASE_DATOS = os.path.join(BASE, "shopstores.db")
 RUTA_CONFIG = os.path.join(BASE, "config.json")
 
 

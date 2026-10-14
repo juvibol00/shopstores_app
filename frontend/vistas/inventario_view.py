@@ -60,7 +60,7 @@ def _lista(page, al_abrir, al_ver_catalogo):
     buscador = ft.TextField(
         hint_text="Buscar producto",
         dense=True,
-        border_color=paleta.BEIGE,
+        border_color=paleta.LILA,
         focused_border_color=paleta.MARCA,
         bgcolor=paleta.TARJETA, border_radius=10,
         prefix_icon=ft.Icons.SEARCH,
@@ -74,7 +74,7 @@ def _lista(page, al_abrir, al_ver_catalogo):
             imagen = ft.Image(src=fila["miniatura"], width=56, height=56,
                               fit=ft.BoxFit.COVER, border_radius=8)
         else:
-            imagen = ft.Container(width=56, height=56, bgcolor=paleta.BEIGE,
+            imagen = ft.Container(width=56, height=56, bgcolor=paleta.LILA,
                                   border_radius=8,
                                   content=ft.Icon(ft.Icons.IMAGE_NOT_SUPPORTED,
                                                   color=paleta.MARCA_CLARA, size=22),
@@ -97,7 +97,7 @@ def _lista(page, al_abrir, al_ver_catalogo):
                         "sin stock" if sin_stock else formato.cantidad(fila["stock"]),
                         size=12, weight=estilo.MEDIO,
                         color=paleta.ERROR if sin_stock else paleta.TEXTO),
-                    bgcolor=paleta.BEIGE_CLARO, border_radius=8,
+                    bgcolor=paleta.LILA_CLARO, border_radius=8,
                     padding=ft.Padding(9, 4, 9, 4)),
             ], spacing=12),
             padding=(10, 10, 10, 10),
@@ -166,7 +166,7 @@ def _lista(page, al_abrir, al_ver_catalogo):
             ], spacing=4, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             buscador,
         ], spacing=12, tight=True),
-        bgcolor=paleta.BEIGE_CLARO,
+        bgcolor=paleta.LILA_CLARO,
         padding=ft.Padding(16, 14, 12, 14),
     )
 
@@ -271,7 +271,7 @@ def _cuerpo_ficha(page, producto_id, al_volver, recargar):
                 _bloque("Costo de compra",
                         formato.dinero(costo) if costo > 0 else "sin cargar",
                         color=paleta.AVISO if costo <= 0 else None),
-                ft.Divider(height=10, color=paleta.BEIGE),
+                ft.Divider(height=10, color=paleta.LILA),
                 _bloque("Margen", formato.dinero(margen),
                         color=paleta.ERROR if margen < 0 else paleta.OK,
                         tamano=16),
@@ -396,7 +396,7 @@ def _boton_agregar_foto(page, producto_id, recargar):
 
     return ft.Container(
         content=ft.Icon(ft.Icons.ADD_A_PHOTO, color=paleta.MARCA, size=24),
-        width=76, height=76, bgcolor=paleta.BEIGE_CLARO, border_radius=8,
+        width=76, height=76, bgcolor=paleta.LILA_CLARO, border_radius=8,
         alignment=ft.Alignment.CENTER, on_click=elegir,
     )
 
@@ -409,22 +409,22 @@ def _formulario_producto(page, producto_id, al_terminar):
     existente = basedatos.obtener_producto(producto_id) if producto_id else None
 
     nombre = ft.TextField(label="Nombre", value=existente["nombre"] if existente else "",
-                          border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
+                          border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     descripcion = ft.TextField(
         label="Descripción (sale en el catálogo)",
         value=existente["descripcion"] if existente else "",
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     costo = ft.TextField(label="Costo de compra ($)",
                          value=f"{float(existente['costo_usd']):g}" if existente else "",
                          keyboard_type=ft.KeyboardType.NUMBER,
-                         border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
+                         border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     precio = ft.TextField(label="Precio de venta ($)",
                           value=f"{float(existente['precio_usd']):g}" if existente else "",
                           keyboard_type=ft.KeyboardType.NUMBER,
-                          border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
+                          border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     stock_inicial = ft.TextField(label="Existencia inicial", value="0",
                                  keyboard_type=ft.KeyboardType.NUMBER,
-                                 border_color=paleta.BEIGE,
+                                 border_color=paleta.LILA,
                                  focused_border_color=paleta.MARCA)
     en_catalogo = ft.Switch(label="Mostrar en el catálogo",
                             value=bool(existente["en_catalogo"]) if existente else True,

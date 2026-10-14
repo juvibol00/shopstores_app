@@ -1,0 +1,79 @@
+name: Build ShopStore Web
+
+# Hermano del flujo del APK. Compila la MISMA aplicacion para navegador y la deja
+# publicada en GitHub Pages, que es gratis y no pide servidor encendido.
+#
+# El de Android no se toca: son dos versiones del mismo codigo, no un reemplazo.
+#
+# **Primera vez:** en Settings -> Pages hay que poner "Source: GitHub Actions".
+# Sin eso el ultimo paso falla aunque la compilacion haya salido bien.
+#
+# Esta primera version va deliberadamente pelada. Lo unico que queremos saber hoy
+# es si la aplicacion **compila** para navegador: `cryptography` y `pillow` llevan
+# codigo nativo y necesitan una version hecha para Pyodide. Los ajustes de la app
+# instalable (icono, colores, pantalla completa) se agregan despues, cuando ya
+# sepamos que hay algo que ajustar.
+
+on:
+  workflow_dispatch:
+
+# Lo que pide la publicacion en Pages: leer el codigo y escribir el sitio.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Si se lanzan dos seguidos, que no se pisen entre si.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publicar.outputs.page_url }}
+    steps:
+      - name: Leer el codigo del repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar el motor de Flet
+        run: pip install flet==0.85.3
+
+      # Lo mismo que en el APK: `flet build` empaqueta la carpeta tal cual.
+      - name: Quitar del paquete lo que no va publicado
+        run: |
+          rm -rf .git .github datos pruebas
+          find . -name "__pycache__" -type d -prune -exec rm -rf {} +
+          echo "--- lo que se va a empaquetar ---"
+          ls -a
+
+      # `--base-url` es obligatorio: en GitHub Pages el sitio NO vive en la raiz
+      # del dominio sino en /<repositorio>/. Sin esto la pagina carga en blanco,
+      # porque busca sus propios archivos en una ruta que no existe.
+      - name: Construir la version web
+        run: yes | flet build web --verbose --base-url vanestore_app
+
+      - name: Ver que salio
+        run: |
+          echo "--- contenido de build/web ---"
+          ls -la build/web
+          du -sh build/web
+
+      - name: Preparar la publicacion
+        uses: actions/configure-pages@v5
+
+      - name: Empaquetar el sitio
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Publicar en GitHub Pages
+        id: publicar
+        uses: actions/deploy-pages@v4

@@ -1,1 +1,1 @@
-"""Pantallas de Vane\x27s Store."""
+"""Pantallas de ShopStore\x27s."""

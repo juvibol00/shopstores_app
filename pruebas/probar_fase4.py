@@ -6,7 +6,7 @@ import sys
 import tempfile
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-TEMPORAL = tempfile.mkdtemp(prefix="vanes_metricas_")
+TEMPORAL = tempfile.mkdtemp(prefix="shopstores_metricas_")
 os.environ["FLET_APP_STORAGE_DATA"] = TEMPORAL
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -162,7 +162,7 @@ check(len(serie) == (bd.datetime.now().astimezone().date()
       "rellena los días sin ventas")
 
 print("\nSin datos no revienta")
-vacio = tempfile.mkdtemp(prefix="vanes_vacio_")
+vacio = tempfile.mkdtemp(prefix="shopstores_vacio_")
 bd.cerrar()
 os.environ["FLET_APP_STORAGE_DATA"] = vacio
 import importlib

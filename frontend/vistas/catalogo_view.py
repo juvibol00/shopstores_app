@@ -34,7 +34,7 @@ def crear_vista_catalogo(page, al_volver, al_configurar_correo):
         label="Mandárselo a", dense=True,
         value=correo.leer_configuracion()["destino"],
         keyboard_type=ft.KeyboardType.EMAIL,
-        border_color=paleta.BEIGE, focused_border_color=paleta.MARCA)
+        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     boton_enviar = ft.ElevatedButton(
         content="Enviar por correo", width=400, height=46, disabled=True,
         style=ft.ButtonStyle(bgcolor=paleta.MARCA, color=paleta.FONDO))

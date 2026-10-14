@@ -1,26 +1,29 @@
-"""El respaldo en Neon, contra un Postgres simulado.
+"""El respaldo: toda la base en un archivo, y de vuelta.
 
-No hace falta un servidor: se sustituye la conexión por un doble que guarda las
-filas en memoria y responde como pg8000. Así se puede comprobar lo que de verdad
-importa —qué se sube, cuándo se marca, qué pasa si se corta— sin credenciales.
+Lo que se prueba no es que el archivo se escriba, sino lo que de verdad duele si
+falla: que la copia traiga **lo ultimo** que se guardo —la base trabaja en modo
+WAL y copiarla a mano se deja las ultimas ventas afuera—, que un archivo que no es
+nuestro se rechace **antes** de tocar nada, y que al restaurar vuelva exactamente
+lo que habia.
 """
 import io
 import os
-import re
 import shutil
 import sys
 import tempfile
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-TEMPORAL = tempfile.mkdtemp(prefix="vanes_nube_")
+TEMPORAL = tempfile.mkdtemp(prefix="shopstores_respaldo_")
 os.environ["FLET_APP_STORAGE_DATA"] = TEMPORAL
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PIL import Image
 
+from backend import almacenamiento
 from backend import basedatos as bd
+from backend import correo
 from backend import fotos
-from backend import nube
+from backend import respaldo
 from backend import seguridad
 
 fallos = []
@@ -32,177 +35,101 @@ def check(c, e):
         fallos.append(e)
 
 
-class PostgresFalso:
-    """Guarda las filas en memoria. Solo entiende lo que `nube.py` le manda."""
-
-    def __init__(self, falla_desde=None):
-        self.tablas = {}
-        self.ddl = []
-        self.escrituras = 0
-        self.falla_desde = falla_desde     # revienta a partir de la N-ésima fila
-        self.cerrada = False
-
-    def run(self, sql, **kw):
-        limpio = " ".join(sql.split())
-        if limpio.upper().startswith(("CREATE TABLE", "ALTER TABLE")):
-            self.ddl.append(limpio)
-            tabla = re.search(r'"([^"]+)"', limpio).group(1)
-            self.tablas.setdefault(tabla, {})
-            return []
-        if limpio.upper().startswith("INSERT"):
-            self.escrituras += 1
-            if self.falla_desde is not None and self.escrituras > self.falla_desde:
-                raise RuntimeError("connection reset by peer")
-            tabla = re.search(r'INSERT INTO "([^"]+)"', limpio).group(1)
-            clave = kw.get("id") or kw.get("clave")
-            self.tablas.setdefault(tabla, {})[clave] = dict(kw)
-            return []
-        m = re.match(r'SELECT COUNT\(\*\) FROM "([^"]+)"', limpio, re.I)
-        if m:
-            return [[len(self.tablas.get(m.group(1), {}))]]
-        m = re.match(r'SELECT (.+) FROM "([^"]+)"', limpio, re.I)
-        if m:
-            columnas = [c.strip().strip('"') for c in m.group(1).split(",")]
-            return [[fila.get(c) for c in columnas]
-                    for fila in self.tablas.get(m.group(2), {}).values()]
-        if "version()" in limpio:
-            return [["PostgreSQL 18.6 on x86_64"]]
-        return []
-
-    def close(self):
-        self.cerrada = True
-
-
-def usar(falso):
-    nube._conectar = lambda cadena=None: falso
-
-
 def imagen():
-    im = Image.new("RGB", (800, 800), "#A67C52")
+    im = Image.new("RGB", (800, 600), "#6B4E9B")
     b = io.BytesIO()
     im.save(b, format="JPEG")
     return b.getvalue()
 
 
-# --------------------------------------------------------------------- datos
+print("Armar el respaldo")
 seguridad.establecer("472913", "472913")
 bd.guardar_tasa(620.0)
-efectivo = [m for m in bd.listar_metodos() if m["moneda"] == "USD"][0]["id"]
-prod = bd.crear_producto("Cartera", "Cuero", 20.0, 50.0, stock_inicial=20)
-bd.guardar_foto(prod, fotos.preparar(imagen()))
-cliente = bd.crear_cliente("Ana", "0412-1234567")
-bd.registrar_venta([{"producto_id": prod, "cantidad": 2}], 620.0,
-                   pagos=[{"metodo_id": efectivo, "monto": 100}])
-bd.registrar_venta([{"producto_id": prod, "cantidad": 1}], 620.0, tipo="credito",
-                   cliente_id=cliente)
-bd.registrar_abono(cliente, 20, "USD", 620.0)
-bd.crear_gasto("Delivery", "Moto", 12.0, "USD")
+cartera = bd.crear_producto("Cartera de cuero", "Cuero natural", 20.0, 45.0,
+                            stock_inicial=5)
+bd.guardar_foto(cartera, fotos.preparar(imagen()))
+cliente = bd.crear_cliente("Ana Pérez", "0412-1234567", "")
+metodos = bd.listar_metodos()
+bd.registrar_venta([{"producto_id": cartera, "cantidad": 2}], 620.0,
+                   pagos=[{"metodo_id": metodos[0]["id"], "monto": 90.0}])
 
-print("La cadena de conexión")
-for mala, motivo in [("mysql://a:b@c/d", "otro motor"),
-                     ("postgresql://", "sin host"),
-                     ("no es una url", "sin forma de URL")]:
+copia = respaldo.armar()
+check(copia[:16] == b"SQLite format 3\x00", "sale una base de datos de verdad")
+check(len(copia) > 10_000, f"y pesa lo que debe ({len(copia) / 1024:.0f} KB)")
+
+# El punto fino: la venta se acaba de registrar y en modo WAL puede estar todavia
+# en el archivo de al lado. Si el respaldo se hiciera copiando el archivo
+# principal a mano, esa venta NO estaria.
+resumen = respaldo.revisar(copia)
+check(resumen["ventas"] == 1, "la copia trae la venta recien hecha")
+check(resumen["productos"] == 1 and resumen["clientes"] == 1,
+      "y el producto y el cliente")
+
+print("\nEl nombre del archivo")
+from datetime import datetime, timezone, timedelta
+nombre = respaldo.nombre_sugerido(
+    datetime(2026, 10, 9, 23, 30, tzinfo=timezone(timedelta(hours=-4))))
+check(nombre == "respaldo-shopstores-2026-10-09.db",
+      f"lleva la fecha local, no la de UTC ({nombre})")
+
+print("\nLo que NO se acepta")
+for malo, motivo in [
+    (b"", "un archivo vacío"),
+    (b"esto no es una base de datos", "un archivo cualquiera"),
+    (b"SQLite format 3\x00" + b"\x00" * 200, "una base sin nuestras tablas"),
+]:
     try:
-        nube.partir_cadena(mala)
+        respaldo.revisar(malo)
         check(False, f"rechaza {motivo}")
-    except nube.ErrorDeNube:
+    except respaldo.ErrorDeRespaldo:
         check(True, f"rechaza {motivo}")
 
-buena = ("postgresql://vane:cla%40ve@ep-rapid-sky-123.us-east-2.aws.neon.tech/"
-         "vanesstore?sslmode=require")
-p = nube.partir_cadena(buena)
-check(p["password"] == "cla@ve", "decodifica el %40 de la contraseña")
-check(p["database"] == "vanesstore", "saca el nombre de la base")
-
-check(not nube.configurado(), "al principio no hay conexión guardada")
-nube.guardar_cadena(buena)
-check(nube.configurado(), "se guarda")
-check(nube.leer_cadena() == buena, "y se lee descifrada")
-from backend import almacenamiento
-crudo = str(almacenamiento.obtener("neon_cadena"))
-check("cla%40ve" not in crudo and "vane:" not in crudo,
-      "la cadena NO queda en claro en el disco")
-check("neon_cadena" in seguridad.SECRETOS,
-      "se vuelve a cifrar al cambiar el PIN")
-
-print("\nQué falta por subir")
-faltan = nube.pendientes()
-check("productos" in faltan and "ventas" in faltan, "detecta lo pendiente")
-check("configuracion" not in faltan, "la configuración no lleva marca y no cuenta")
-antes = nube.total_pendiente()
-check(antes > 0, f"hay {antes} filas pendientes")
-
-print("\nEl respaldo")
-falso = PostgresFalso()
-usar(falso)
-avisos = []
-subidas = nube.respaldar(avisos.append)
-check(sum(subidas.values()) == antes, "sube exactamente lo que estaba pendiente")
-check(nube.total_pendiente() == 0, "y no queda nada pendiente")
-check(falso.cerrada, "cierra la conexión al terminar")
-check(len(avisos) > 0, "informa el avance mientras sube")
-
-check(len(falso.tablas.get("productos", {})) == 1, "llegó el producto")
-check(len(falso.tablas.get("ventas", {})) == 2, "llegaron las dos ventas")
-check(len(falso.tablas.get("producto_fotos", {})) == 1, "llegó la foto")
-foto_arriba = list(falso.tablas["producto_fotos"].values())[0]
-check(isinstance(foto_arriba["completa"], bytes), "la foto viaja como bytes")
-check(len(falso.tablas.get("configuracion", {})) >= 2, "y la configuración")
-
-esquema = " ".join(falso.ddl)
-check("BYTEA" in esquema, "las fotos se declaran BYTEA")
-check("DOUBLE PRECISION" in esquema, "los montos como DOUBLE PRECISION")
-check("REFERENCES" not in esquema, "la copia no lleva claves foráneas")
-check("PRIMARY KEY" in esquema, "pero sí clave primaria, para poder reescribir")
-
-print("\nRespaldar dos veces no duplica")
-escrituras_antes = falso.escrituras
-nube.respaldar()
-check(falso.escrituras - escrituras_antes <= len(falso.tablas.get("configuracion", {})),
-      "el segundo respaldo no reenvía lo ya subido")
-check(len(falso.tablas["ventas"]) == 2, "y no duplicó ventas")
-
-print("\nLo nuevo sí se sube")
-bd.registrar_venta([{"producto_id": prod, "cantidad": 1}], 620.0,
-                   pagos=[{"metodo_id": efectivo, "monto": 50}])
-check(nube.total_pendiente() > 0, "una venta nueva queda pendiente")
-nube.respaldar()
-check(len(falso.tablas["ventas"]) == 3, "y sube en el siguiente respaldo")
-check(nube.total_pendiente() == 0, "dejando todo al día")
-
-print("\nSi se corta la red, lo que no subió sigue pendiente")
-bd.registrar_venta([{"producto_id": prod, "cantidad": 1}], 620.0,
-                   pagos=[{"metodo_id": efectivo, "monto": 50}])
-pendiente_antes = nube.total_pendiente()
-roto = PostgresFalso(falla_desde=0)      # falla en la primera escritura
-usar(roto)
+# Una base de SQLite legitima pero de otro programa.
+import sqlite3
+ajena = os.path.join(TEMPORAL, "ajena.db")
+c = sqlite3.connect(ajena)
+c.execute("CREATE TABLE cosas (id INTEGER)")
+c.commit()
+c.close()
 try:
-    nube.respaldar()
-    check(False, "un corte de red avisa en vez de mentir")
-except nube.ErrorDeNube as ex:
-    mensaje = str(ex)
-    check("conectar" in mensaje and "internet" in mensaje,
-          "un corte de red avisa en palabras que la persona puede usar")
-    check("5432" not in mensaje and "VPN" not in mensaje,
-          "y sin jerga técnica: el puerto y el VPN no le dicen nada a quien vende")
-check(nube.total_pendiente() == pendiente_antes,
-      "lo que no llegó sigue marcado como pendiente")
+    respaldo.revisar(open(ajena, "rb").read())
+    check(False, "rechaza una base de otro programa")
+except respaldo.ErrorDeRespaldo:
+    check(True, "rechaza una base de otro programa")
 
 print("\nRestaurar")
-usar(falso)
-copia = nube.resumen_de_la_copia()
-check(copia["ventas"] == 3, "la copia dice cuántas ventas tiene")
-productos_antes = bd.contar_productos()
-bd.crear_producto("Solo local", "", 1.0, 2.0)
-check(bd.contar_productos() == productos_antes + 1, "hay un producto solo local")
-traidas = nube.restaurar()
-check(bd.contar_productos() == productos_antes,
-      "restaurar reemplaza: el producto que no estaba en la copia desaparece")
-check(bd.contar_ventas() == 3, "y vuelven las tres ventas de la copia")
-check(bd.leer_tasa() == 620.0, "la configuración también vuelve")
-check(len(bd.listar_fotos(prod)) == 1, "y la foto")
-check(bd.saldo_cliente(cliente) > 0, "el saldo del cliente se reconstruye")
-check(nube.total_pendiente() == 0, "lo restaurado ya está sincronizado")
+# Se cambia todo despues de hacer la copia, para ver que de verdad vuelve atras.
+bd.crear_producto("Producto de después", "", 1.0, 2.0, stock_inicial=1)
+bd.crear_cliente("Cliente de después", "", "")
+check(bd.contar_productos() == 2, "antes de restaurar hay 2 productos")
+
+vuelto = respaldo.restaurar(copia)
+check(vuelto["productos"] == 1, "restaurar dice cuántos productos trae")
+check(bd.contar_productos() == 1, "y la base vuelve a tener 1")
+check([c["nombre"] for c in bd.listar_clientes()] == ["Ana Pérez"],
+      "el cliente de después desapareció")
+check(bd.contar_ventas() == 1, "la venta sigue ahí")
+check(len(bd.listar_fotos(bd.listar_productos()[0]["id"])) == 1,
+      "y la foto del producto también: viaja dentro de la base")
+
+# La base anterior se guarda al lado, por si el archivo elegido era el viejo.
+check(os.path.exists(almacenamiento.RUTA_BASE_DATOS + ".anterior"),
+      "la base que había queda guardada como .anterior")
+
+print("\nEl correo del respaldo")
+correo.guardar_configuracion("tienda@gmail.com", "abcdefghijklmnop", "")
+mensaje = correo.armar_mensaje(
+    "tienda@gmail.com", "tienda@gmail.com", "Respaldo", copia,
+    "respaldo-shopstores-2026-10-09.db", cuerpo="Adjunto va el respaldo.",
+    tipo="octet-stream")
+tipos = [p.get_content_type() for p in mensaje.walk()]
+check("application/octet-stream" in tipos,
+      "el adjunto NO va como PDF: es una base de datos")
+adjuntos = [p for p in mensaje.walk()
+            if p.get_filename() == "respaldo-shopstores-2026-10-09.db"]
+check(len(adjuntos) == 1, "y viaja con el nombre que lleva la fecha")
+check(adjuntos[0].get_payload(decode=True) == copia,
+      "el archivo llega entero, byte por byte")
 
 bd.cerrar()
 shutil.rmtree(TEMPORAL, ignore_errors=True)

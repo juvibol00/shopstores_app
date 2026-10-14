@@ -28,7 +28,7 @@ LARGO_MINIMO = 6
 # Claves de `almacenamiento` cuyo valor esta cifrado. Al cambiar el PIN hay que
 # descifrarlas con la llave vieja y volverlas a cifrar con la nueva, o quedan
 # ilegibles para siempre.
-SECRETOS = ["correo_clave_app", "neon_cadena"]
+SECRETOS = ["correo_clave_app"]
 
 # La llave de cifrado vive **solo en memoria** y solo mientras la sesion esta
 # abierta. Se deriva del PIN al entrar; si la app se cierra, no queda en ningun
