@@ -165,6 +165,33 @@ check(len(serie) == (bd.datetime.now().astimezone().date()
                      .astimezone().date()).days + 1,
       "rellena los días sin ventas")
 
+print("\nVarias lecturas en un viaje")
+from backend import nube
+desde_l, hasta_l, _ = bd.rango("semana")
+juntas = nube.llamar("lote", {"llamadas": [
+    {"f": "metricas", "p": {"desde": desde_l, "hasta": hasta_l}},
+    {"f": "resumen_inventario", "p": {}},
+    {"f": "leer_config", "p": {"clave": "no-existe"}},
+]})
+check(len(juntas) == 3, "devuelve una respuesta por cada pedido, en orden")
+check(juntas[2] is None, "y una que no tiene valor vuelve vacia, sin correrse")
+for prohibida in ("registrar_venta", "crear_gasto", "lote", "fallar", "pg_sleep"):
+    try:
+        nube.llamar("lote", {"llamadas": [{"f": prohibida, "p": {}}]})
+        rechazo = False
+    except nube.ErrorRemoto as ex:
+        rechazo = ex.codigo == "P0001"
+    check(rechazo, f"no deja colar «{prohibida}»: solo lecturas de la app")
+
+antes = bd.metricas("semana")["vendido"]
+bd.precargar_gestion("semana")
+bd.crear_gasto("Delivery", "", 1)          # una escritura en el medio
+bd.registrar_venta([{"producto_id": cartera, "cantidad": 1}], TASA,
+                   pagos=[{"metodo_id": efectivo, "monto": 50}])
+check(bd.metricas("semana")["vendido"] > antes,
+      "lo adelantado se descarta si algo se escribe: no muestra un dato viejo")
+
+
 print("\nSin datos no revienta")
 # Una cuenta recien creada, sin una sola venta.
 _pg = postgres_local.conectar_la_app()

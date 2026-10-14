@@ -24,6 +24,8 @@ puesta y las comparaciones tienen que cerrar.
 """
 
 import base64
+import json
+import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
@@ -42,15 +44,45 @@ class PagoNoCuadra(Exception):
 _ERRORES = {"SinExistencia": SinExistencia, "PagoNoCuadra": PagoNoCuadra}
 
 
+# Las funciones que solo leen. Se pueden pedir de a varias en un viaje
+# (`lote`) y reintentar si se corta la conexion; las demas, no.
+LECTURAS = frozenset({
+    "leer_config", "listar_productos", "contar_productos", "obtener_producto",
+    "movimientos", "listar_fotos", "obtener_foto", "listar_clientes",
+    "obtener_cliente", "listar_metodos", "obtener_metodo", "obtener_venta",
+    "pagos_de_venta", "desglose_de_pagos", "listar_ventas", "contar_ventas",
+    "resumen_ventas", "facturas_pendientes", "clientes_con_saldo",
+    "total_por_cobrar", "abonos_de_cliente", "listar_gastos",
+    "categorias_de_gasto", "metricas", "top_productos", "gastos_por_categoria",
+    "ventas_para_serie", "resumen_inventario", "productos_del_catalogo", "lote",
+})
+
+# **Lo que ya vino en un lote y espera a que lo pidan.** Ver `_de_un_viaje`.
+_listo = {}
+VIGENCIA = 5        # segundos: lo justo para armar una pantalla
+
+
+def _clave(funcion, datos):
+    return funcion + json.dumps(datos, sort_keys=True, default=str)
+
+
 def _rpc(funcion, /, **datos):
     """Llama a la funcion gemela y traduce sus errores a los de siempre.
 
     Un error de negocio (`P0001`: sin existencia, no cuadra, ya anulada...) trae
     un texto escrito para la pantalla y sale tal cual. Cualquier otro es un fallo
     que nadie previo: se muestra con su detalle para poder diagnosticarlo.
+
+    Si la respuesta ya vino en un lote, se usa esa y no se viaja.
     """
+    guardado = _listo.pop(_clave(funcion, datos), None)
+    if guardado is not None and time.monotonic() - guardado[0] < VIGENCIA:
+        return guardado[1]
+    if funcion not in LECTURAS:
+        # Algo se escribio: lo que vino antes puede haber quedado viejo.
+        _listo.clear()
     try:
-        return nube.llamar(funcion, datos)
+        return nube.llamar(funcion, datos, lectura=funcion in LECTURAS)
     except nube.ErrorRemoto as ex:
         if ex.codigo == "P0001":
             raise _ERRORES.get(ex.pista, ValueError)(ex.mensaje) from None
@@ -77,7 +109,93 @@ def nuevo_id():
 def preparar_cuenta():
     """Deja la cuenta lista para vender: siembra los metodos de pago la primera
     vez. Se llama al entrar; despues de la primera vez no hace nada."""
+    _listo.clear()          # lo de otra cuenta, si la hubo, no sirve
     _rpc("preparar_cuenta")
+
+
+# --------------------------------------------------------------------------
+# Una pantalla, un viaje
+# --------------------------------------------------------------------------
+#
+# Cada viaje a Supabase tarda de 0,25 a 0,5 segundos. Inicio pedia doce cosas al
+# abrirse, una por una: seis segundos mirando la pantalla quieta.
+#
+# La salida no fue reescribir las pantallas sino **adelantarse**: antes de
+# armarlas se piden todas sus lecturas en un solo viaje (`lote`), y cuando la
+# pantalla las pide de a una, las respuestas ya estan aca. Cada respuesta se usa
+# **una sola vez** y vence a los pocos segundos, y cualquier escritura descarta
+# todo lo adelantado: nunca se muestra un dato viejo despues de un cambio.
+#
+# Los argumentos de cada llamada tienen que ser **exactamente** los que usa la
+# funcion de abajo; si no coinciden, no pasa nada malo, solo se viaja igual.
+# `probar_fase4.py` cuenta los viajes de cada pantalla para que no pase sin
+# que se note.
+
+def _de_un_viaje(*llamadas):
+    _listo.clear()
+    try:
+        resultados = nube.llamar(
+            "lote", {"llamadas": [{"f": f, "p": d} for f, d in llamadas]},
+            lectura=True)
+    except (nube.ErrorRemoto, nube.ErrorDeNube):
+        return      # si falla, cada pantalla pide lo suyo como antes
+    momento = time.monotonic()
+    for (funcion, datos), resultado in zip(llamadas, resultados):
+        _listo[_clave(funcion, datos)] = (momento, resultado)
+
+
+def _hoy_local():
+    return datetime.now().astimezone().date().isoformat()
+
+
+def precargar_inicio():
+    sp_desde, sp_hasta, _ = rango("semana_pasada")
+    _de_un_viaje(
+        ("leer_config", {"clave": "tasa_bcv"}),
+        ("leer_config", {"clave": "tasa_actualizada_en"}),
+        ("leer_config", {"clave": "resumen_ultima_semana"}),
+        ("resumen_inventario", {}),
+        ("resumen_ventas", {"desde": _inicio_del_dia_utc(), "hasta": None}),
+        ("resumen_ventas", {"desde": sp_desde, "hasta": sp_hasta}),
+        ("clientes_con_saldo", {}),
+    )
+
+
+def precargar_venta():
+    _de_un_viaje(
+        ("leer_config", {"clave": "tasa_bcv"}),
+        ("listar_metodos", {"incluir_inactivos": False}),
+        ("resumen_ventas", {"desde": _inicio_del_dia_utc(), "hasta": None}),
+    )
+
+
+def precargar_inventario(busqueda, tope):
+    _de_un_viaje(
+        ("listar_productos", {"busqueda": busqueda.strip(), "limite": tope}),
+        ("contar_productos", {"busqueda": busqueda.strip()}),
+        ("resumen_inventario", {}),
+    )
+
+
+def _lecturas_del_periodo(desde, hasta):
+    return [
+        ("metricas", {"desde": desde, "hasta": hasta}),
+        ("top_productos", {"desde": desde, "hasta": hasta, "limite": 5}),
+        ("ventas_para_serie", {"desde": desde, "hasta": hasta}),
+        ("total_por_cobrar", {"hoy": _hoy_local()}),
+    ]
+
+
+def precargar_gestion(periodo):
+    desde, hasta, _ = rango(periodo)
+    _de_un_viaje(*_lecturas_del_periodo(desde, hasta))
+
+
+def precargar_semana(desde, hasta):
+    """Todo lo que lleva el resumen semanal (ver `resumen_semanal.datos`)."""
+    _de_un_viaje(*_lecturas_del_periodo(desde, hasta),
+                 ("desglose_de_pagos", {"desde": desde, "hasta": hasta}),
+                 ("gastos_por_categoria", {"desde": desde, "hasta": hasta}))
 
 
 def cerrar():
@@ -476,8 +594,7 @@ def total_por_cobrar():
     Se separa lo vencido porque no es lo mismo tener $500 en la calle todos al dia
     que tener $500 de los cuales $300 ya se pasaron de fecha.
     """
-    hoy = datetime.now().astimezone().date().isoformat()
-    fila = _rpc("total_por_cobrar", hoy=hoy)
+    fila = _rpc("total_por_cobrar", hoy=_hoy_local())
     return {"total": float(fila["total"]), "vencido": float(fila["vencido"]),
             "clientes": fila["clientes"], "facturas": fila["facturas"]}
 

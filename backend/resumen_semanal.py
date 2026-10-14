@@ -50,7 +50,10 @@ def hay_pendiente():
     deja de leerse."""
     if ultimo_enviado() == marcador():
         return False
-    return datos()["metricas"]["ventas"] > 0
+    # Solo cuantas ventas hubo, no el resumen entero: esto se pregunta cada vez
+    # que se abre Inicio, y armar el resumen eran seis viajes a Supabase.
+    desde, hasta, _ = basedatos.rango("semana_pasada")
+    return basedatos.resumen_ventas(desde, hasta)["ventas"] > 0
 
 
 def marcar_enviado():
@@ -60,6 +63,7 @@ def marcar_enviado():
 def datos():
     """Todo lo que va en el resumen, de la semana pasada completa."""
     desde, hasta, _ = basedatos.rango("semana_pasada")
+    basedatos.precargar_semana(desde, hasta)       # las seis, en un viaje
     primero = datetime.fromisoformat(desde).astimezone().date()
     ultimo = datetime.fromisoformat(hasta).astimezone().date() - timedelta(days=1)
     return {

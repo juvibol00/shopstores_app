@@ -104,6 +104,8 @@ def _lista(page, al_abrir, al_ver_catalogo):
             al_tocar=lambda e, pid=fila["id"]: al_abrir(pid))
 
     def repintar():
+        # La lista, el total y el resumen de abajo: un solo viaje a Supabase.
+        basedatos.precargar_inventario(estado["busqueda"], estado["tope"])
         productos = basedatos.listar_productos(estado["busqueda"], estado["tope"])
         total = basedatos.contar_productos(estado["busqueda"])
 

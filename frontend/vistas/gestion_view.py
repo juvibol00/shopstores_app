@@ -210,6 +210,8 @@ def _boton_resumen(page, al_terminar):
 
 
 def _resumen(page, estado, al_cambiar, al_ver_gastos):
+    # Las cuatro lecturas de esta pantalla, en un solo viaje a Supabase.
+    basedatos.precargar_gestion(estado["periodo"])
     m = basedatos.metricas(estado["periodo"])
     top = basedatos.top_productos(estado["periodo"])
     serie = basedatos.serie_diaria(estado["periodo"])

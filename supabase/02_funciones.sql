@@ -1059,6 +1059,46 @@ language sql stable security invoker set search_path = '' as $$
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Varias lecturas en un solo viaje
+-- ---------------------------------------------------------------------------
+
+-- Corre varias de las funciones de arriba y devuelve sus resultados en orden.
+--
+-- Existe por la velocidad: Inicio hacia doce llamadas al abrirse, y a medio
+-- segundo cada una eran seis segundos de espera. Con esto la app pide todo lo
+-- de una pantalla de una vez (ver `precargar_*` en `basedatos.py`).
+--
+-- **Solo acepta lecturas**: funciones de `public` marcadas `stable` y con el
+-- argumento `p`. Una venta o un abono no pueden entrar por aca, y tampoco nada
+-- que no sea de la app. Corre como quien llama, asi que el RLS sigue mandando.
+create or replace function public.lote(p jsonb) returns jsonb
+language plpgsql stable security invoker set search_path = '' as $$
+declare
+    llamada jsonb;
+    resultado jsonb;
+    resultados jsonb := '[]'::jsonb;
+begin
+    for llamada in select * from jsonb_array_elements(p -> 'llamadas') loop
+        if not exists (
+            select 1 from pg_catalog.pg_proc pr
+              join pg_catalog.pg_namespace n on n.oid = pr.pronamespace
+             where n.nspname = 'public' and pr.proname = llamada ->> 'f'
+               and pr.proname <> 'lote' and pr.provolatile in ('s', 'i')
+               and pr.pronargs = 1
+               and pr.proargtypes[0] = 'jsonb'::pg_catalog.regtype::pg_catalog.oid)
+        then
+            perform privado.fallar(format('«%s» no se puede pedir en un lote.',
+                                          llamada ->> 'f'));
+        end if;
+        execute format('select public.%I($1)', llamada ->> 'f')
+           into resultado using coalesce(llamada -> 'p', '{}'::jsonb);
+        resultados := resultados || jsonb_build_array(resultado);
+    end loop;
+    return resultados;
+end
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Quien puede llamarlas
 -- ---------------------------------------------------------------------------
 --

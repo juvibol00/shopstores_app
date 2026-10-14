@@ -12,9 +12,11 @@ Toda la app habla con Supabase por **dos puertas**, y las dos viven aca:
 **Por que llamadas sincronicas.** Todo el codigo de la app esta escrito para una
 base que responde en el acto (`registrar_venta(...)` devuelve la venta). Para no
 reescribirlo, la llamada espera la respuesta. En la computadora y en Android eso
-es `urllib`; en el navegador, `XMLHttpRequest` en modo sincronico, que esta
+es `http.client`; en el navegador, `XMLHttpRequest` en modo sincronico, que esta
 permitido porque Flet corre Python dentro de un *worker*, no en la pagina.
-Comprobado en el mismo Pyodide 0.27.7 de la app, contra el proyecto real.
+Comprobado en el mismo Pyodide 0.27.7 de la app, contra el proyecto real. En
+la computadora y en Android se usa `http.client` con la conexion abierta, que
+`urllib` no reusa.
 
 **Las pruebas no tocan la red.** Ponen en `transporte` una funcion que llama a las
 mismas funciones SQL en un Postgres local (ver `pruebas/postgres_local.py`).
@@ -22,6 +24,7 @@ mismas funciones SQL en un Postgres local (ver `pruebas/postgres_local.py`).
 
 import json
 import sys
+import threading
 import time
 
 from backend import almacenamiento
@@ -75,31 +78,61 @@ class ErrorRemoto(Exception):
 # El viaje por la red
 # --------------------------------------------------------------------------
 
-def _http(metodo, ruta, cuerpo=None, token=None):
+def _http(metodo, ruta, cuerpo=None, token=None, reintentable=False):
     """Devuelve `(estado, texto)`. Un estado de error **no** es una excepcion:
-    lo decide quien llama. Solo la falta de red lo es."""
+    lo decide quien llama. Solo la falta de red lo es.
+
+    `reintentable` dice si se puede mandar dos veces sin dano (una lectura). Ver
+    `_http_directo`."""
     encabezados = {"apikey": CLAVE_PUBLICA, "Content-Type": "application/json"}
     if token:
         encabezados["Authorization"] = f"Bearer {token}"
     datos = json.dumps(cuerpo) if cuerpo is not None else None
     if EN_NAVEGADOR:
         return _http_navegador(metodo, URL + ruta, datos, encabezados)
-    return _http_urllib(metodo, URL + ruta, datos, encabezados)
+    return _http_directo(metodo, ruta, datos, encabezados, reintentable)
 
 
-def _http_urllib(metodo, url, datos, encabezados):
-    import urllib.error
-    import urllib.request
-    pedido = urllib.request.Request(
-        url, data=datos.encode("utf-8") if datos is not None else None,
-        headers=encabezados, method=metodo)
-    try:
-        with urllib.request.urlopen(pedido, timeout=30) as r:
-            return r.status, r.read().decode("utf-8")
-    except urllib.error.HTTPError as ex:
-        return ex.code, ex.read().decode("utf-8", "replace")
-    except (urllib.error.URLError, OSError):
-        raise SinConexion(SIN_CONEXION) from None
+# **Una sola conexion, reusada.** Abrir una conexion segura cuesta tres idas y
+# vueltas antes de mandar nada; medido desde Venezuela a este proyecto, una
+# llamada con conexion nueva tardaba ~450 ms y con la conexion ya abierta ~250.
+# El navegador ya la reusa solo; esto es para la computadora y Android.
+_conexion = {"c": None, "usada": 0.0}
+_candado = threading.Lock()        # Flet atiende los botones desde varios hilos
+
+# El servidor cierra las conexiones que quedan quietas. Pasado este tiempo se
+# abre una nueva en vez de arriesgarse a escribir en una ya cerrada.
+QUIETA_MAXIMO = 20
+
+
+def _http_directo(metodo, ruta, datos, encabezados, reintentable):
+    """Si la conexion se corta, **solo se reintenta una lectura**. Una venta
+    cortada a mitad de camino pudo haber llegado igual: mandarla de nuevo
+    podria registrarla dos veces. Se avisa que no hubo conexion, y la persona
+    mira el historial antes de volver a cobrar."""
+    import http.client
+    with _candado:
+        for intento in (1, 2):
+            if (_conexion["c"] is None
+                    or time.monotonic() - _conexion["usada"] > QUIETA_MAXIMO):
+                if _conexion["c"] is not None:
+                    _conexion["c"].close()
+                _conexion["c"] = http.client.HTTPSConnection(
+                    URL.split("://", 1)[1], timeout=30)
+            try:
+                _conexion["c"].request(
+                    metodo, ruta,
+                    body=datos.encode("utf-8") if datos is not None else None,
+                    headers=encabezados)
+                respuesta = _conexion["c"].getresponse()
+                texto = respuesta.read().decode("utf-8", "replace")
+                _conexion["usada"] = time.monotonic()
+                return respuesta.status, texto
+            except (http.client.HTTPException, OSError):
+                _conexion["c"].close()
+                _conexion["c"] = None
+                if not reintentable or intento == 2:
+                    raise SinConexion(SIN_CONEXION) from None
 
 
 def _http_navegador(metodo, url, datos, encabezados):
@@ -233,22 +266,24 @@ def _token():
 # Las funciones
 # --------------------------------------------------------------------------
 
-def llamar(nombre, datos=None):
+def llamar(nombre, datos=None, lectura=False):
     """Llama a la funcion `nombre` de `02_funciones.sql` y devuelve su resultado.
 
-    Si falla, lanza `ErrorRemoto` con el codigo, el mensaje y la pista de
-    Postgres; `basedatos` decide que significa para la pantalla.
+    `lectura=True` permite reintentarla si se corta la conexion (ver
+    `_http_directo`). Si falla, lanza `ErrorRemoto` con el codigo, el mensaje y
+    la pista de Postgres; `basedatos` decide que significa para la pantalla.
     """
     datos = datos or {}
     if transporte is not None:
         return transporte(nombre, datos)
 
     estado, texto = _http("POST", f"/rest/v1/rpc/{nombre}", {"p": datos},
-                          token=_token())
+                          token=_token(), reintentable=lectura)
     if estado == 401 and _renovar():
-        # El token vencio entre que se miro la hora y llego el pedido.
+        # El token vencio entre que se miro la hora y llego el pedido. Un 401
+        # quiere decir que no se ejecuto nada: repetirlo es seguro.
         estado, texto = _http("POST", f"/rest/v1/rpc/{nombre}", {"p": datos},
-                              token=_sesion["token"])
+                              token=_sesion["token"], reintentable=lectura)
     if 200 <= estado < 300:
         return _json(texto)
     if estado == 401:

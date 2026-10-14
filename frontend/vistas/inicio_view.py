@@ -176,7 +176,9 @@ def _aviso_resumen(page, al_terminar):
     SELL-B costó semanas enteras sin reporte.
     """
     try:
-        if not resumen_semanal.hay_pendiente() or not correo.configurado():
+        # El correo primero: se mira en el telefono, sin viajar. Sin correo
+        # (siempre, en la web) no hay aviso que mostrar.
+        if not correo.configurado() or not resumen_semanal.hay_pendiente():
             return []
     except Exception:
         # Un fallo calculando el resumen no puede impedir que Inicio abra.
@@ -270,6 +272,8 @@ def _avisos(resumen):
 
 
 def crear_vista_inicio(page, funcion_navegar, funcion_configuracion):
+    # Todo lo que esta pantalla va a leer, en un solo viaje a Supabase.
+    basedatos.precargar_inicio()
     nombre = almacenamiento.obtener("nombre_usuario", "")
     resumen = basedatos.resumen_inventario()
     hoy = basedatos.resumen_de_hoy()

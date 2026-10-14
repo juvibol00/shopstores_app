@@ -67,6 +67,7 @@ def _pantalla_venta(page, funcion_navegar, al_ver_historial):
     carrito = {}          # producto_id -> {nombre, precio, stock, cantidad}
     pagos = []            # [{"metodo_id": ..., "campo": TextField}]
     credito = {"activo": False, "cliente_id": None, "vence": None}
+    basedatos.precargar_venta()           # tasa, metodos y lo de hoy: un viaje
     tasa = basedatos.leer_tasa()
     metodos = basedatos.listar_metodos()
     por_id = {m["id"]: m for m in metodos}

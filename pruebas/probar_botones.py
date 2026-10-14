@@ -644,6 +644,41 @@ check(bool(avisos), "aparece el aviso en la pantalla")
 check(bool(avisos) and "rota a proposito" in avisos[0].value,
       "y dice que fallo, para poder mandarlo en una captura")
 
+print()
+print("Velocidad: cada pantalla va a Supabase una sola vez")
+# Fallo real: Inicio hacia doce viajes al abrirse, a medio segundo cada uno, y
+# cambiar de pestana tardaba segundos. Ahora cada pantalla pide todo junto antes
+# de armarse (`precargar_*`). Si alguien agrega una lectura y no la suma a la
+# precarga, la pantalla sigue andando pero vuelve a viajar de mas: aca se nota.
+from backend import nube
+
+viajes = []
+transporte_real = nube.transporte
+
+
+def contar_viajes(nombre, datos):
+    viajes.append(nombre)
+    return transporte_real(nombre, datos)
+
+
+nube.transporte = contar_viajes
+pantallas = {
+    "Inicio": lambda: inicio_view.crear_vista_inicio(page, lambda n: None,
+                                                     lambda: None),
+    "Venta": lambda: ventas_view.crear_vista_ventas(page, lambda n: None),
+    "Inventario": lambda: inventario_view.crear_vista_inventario(page, lambda: None),
+    "Cobros": lambda: cobros_view.crear_vista_cobros(page),
+    "Gestion": lambda: gestion_view.crear_vista_gestion(page),
+}
+try:
+    for nombre_pantalla, armar in pantallas.items():
+        viajes.clear()
+        armar()
+        check(len(viajes) == 1,
+              f"{nombre_pantalla}: un viaje (hizo {len(viajes)}: {viajes})")
+finally:
+    nube.transporte = transporte_real
+
 bd.cerrar()
 shutil.rmtree(TEMPORAL, ignore_errors=True)
 print(f"\n{'TODO BIEN' if not fallos else 'FALLARON: ' + ', '.join(fallos)}")
