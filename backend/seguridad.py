@@ -53,8 +53,26 @@ class PinInvalido(Exception):
     """El PIN propuesto no cumple las reglas. El mensaje es para mostrarlo."""
 
 
+def _pbkdf2():
+    """`hashlib.pbkdf2_hmac`, repuesto si el navegador lo dejo afuera.
+
+    Es la misma trampa de orden que `HTTPSHandler` (ver `backend/pdf.py`). En el
+    navegador, `pbkdf2_hmac` viene de una pieza que se instala aparte, y el
+    instalador de Flet (`micropip`) importa `hashlib` **antes** de instalarla: el
+    modulo queda guardado sin la funcion, e instalarla despues no lo arregla. Asi
+    el boton «Crear acceso» fallaba sin decir nada. Volver a cargar `hashlib`, con
+    la pieza ya presente, si la trae. Comprobado en el mismo Pyodide 0.27.7.
+
+    En la computadora y en Android la funcion ya esta y la recarga no se ejecuta.
+    """
+    if not hasattr(hashlib, "pbkdf2_hmac"):
+        import importlib
+        importlib.reload(hashlib)     # recarga el mismo modulo, en su lugar
+    return hashlib.pbkdf2_hmac
+
+
 def _derivar(pin, sal, vueltas=VUELTAS):
-    return hashlib.pbkdf2_hmac("sha256", pin.encode("utf-8"), sal, vueltas)
+    return _pbkdf2()("sha256", pin.encode("utf-8"), sal, vueltas)
 
 
 def validar_propuesta(pin, repeticion=None):

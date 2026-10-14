@@ -27,6 +27,25 @@ def _campo_pin(etiqueta, al_enviar=None):
     )
 
 
+def _sin_fallos_mudos(aviso, accion):
+    """Envuelve el boton para que un fallo inesperado **se vea**.
+
+    Un error dentro de un boton no tumba la app: Flet lo anota en la consola y la
+    pantalla queda igual. En la puerta eso es lo peor que puede pasar, porque
+    parece que el boton no hace nada y no hay forma de saber por que. Asi paso en
+    la version web con «Crear acceso». Los avisos esperados (PIN corto, no
+    coinciden) los maneja cada boton; esto es solo para lo que nadie previo.
+    """
+    def envoltura(e):
+        try:
+            accion(e)
+        except Exception as ex:
+            aviso.value = ("No se pudo completar. Mándale una captura de esto a "
+                           f"quien te instaló la app.\n{type(ex).__name__}: {ex}")
+            aviso.update()
+    return envoltura
+
+
 def _marco(controles):
     return ft.Container(
         content=ft.Column(controles, spacing=14, tight=True,
@@ -90,7 +109,8 @@ def _configurar(page, al_entrar):
                     text_align=ft.TextAlign.CENTER),
             _marco([
                 nombre, pin, repetir, debilidad, aviso,
-                estilo.boton("Crear acceso", crear, ancho=260, alto=46),
+                estilo.boton("Crear acceso", _sin_fallos_mudos(aviso, crear),
+                             ancho=260, alto=46),
                 ft.Text("El PIN no se guarda en ningún lado: se guarda una huella "
                         "con la que se puede comprobar, pero no reconstruirlo. "
                         "Si lo olvidas, no hay forma de recuperarlo.",
@@ -120,6 +140,7 @@ def _desbloquear(page, al_entrar):
             pin.value = ""
             pin.update()
 
+    entrar = _sin_fallos_mudos(aviso, entrar)
     pin = _campo_pin("PIN", al_enviar=entrar)
 
     return ft.Container(

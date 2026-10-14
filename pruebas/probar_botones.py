@@ -582,6 +582,62 @@ finally:
     else:
         del sys.modules[roto]
 
+print()
+print("Puerta: el PIN funciona aunque hashlib llegue sin pbkdf2_hmac")
+# Fallo real de la version web: el instalador de Flet importa `hashlib` antes de
+# que el navegador instale la pieza que trae `pbkdf2_hmac`. El modulo quedaba sin
+# la funcion y «Crear acceso» fallaba sin decir nada. Aca se le quita a proposito.
+import hashlib
+from frontend.vistas import pin_view
+
+del hashlib.pbkdf2_hmac
+check(not hasattr(hashlib, "pbkdf2_hmac"), "hashlib quedo como en el navegador")
+seguridad.establecer("583027", "583027")
+check(seguridad.verificar("583027"), "aun asi se crea el PIN y se comprueba")
+check(not seguridad.verificar("583028"), "y un PIN equivocado sigue sin entrar")
+check(hasattr(hashlib, "pbkdf2_hmac"), "la funcion quedo repuesta para lo que siga")
+
+print()
+print("Puerta: un fallo inesperado en el boton se ve, no queda mudo")
+
+
+def boton_de(vista, etiqueta):
+    return buscar_control(vista, lambda c: getattr(c, "on_click", None) is not None
+                          and etiqueta in str(getattr(c, "content", "")))
+
+
+def entrada_que_revienta():
+    raise RuntimeError("pantalla de inicio rota a proposito")
+
+
+puerta = pin_view._configurar(page, entrada_que_revienta)
+campos_puerta = []
+buscar_control(puerta, lambda c: isinstance(c, ft.TextField)
+               and campos_puerta.append(c))
+campos_puerta[0].value = "Prueba"
+campos_puerta[1].value = "583027"
+campos_puerta[2].value = "583027"
+crear = boton_de(puerta, "Crear acceso")
+check(crear is not None, "esta el boton «Crear acceso»")
+# En la app el aviso esta montado en la pagina; aca no, y `update()` se quejaria
+# de eso y no del boton. Se le da un `update` mudo solo mientras dura el toque.
+update_real = ft.Text.update
+ft.Text.update = lambda self: None
+try:
+    crear.on_click(None)
+    salio_limpio = True
+except Exception:
+    salio_limpio = False
+finally:
+    ft.Text.update = update_real
+check(salio_limpio, "el fallo no se escapa del boton")
+avisos = []
+buscar_control(puerta, lambda c: isinstance(c, ft.Text)
+               and "No se pudo completar" in str(c.value) and avisos.append(c))
+check(bool(avisos), "aparece el aviso en la pantalla")
+check(bool(avisos) and "rota a proposito" in avisos[0].value,
+      "y dice que fallo, para poder mandarlo en una captura")
+
 bd.cerrar()
 shutil.rmtree(TEMPORAL, ignore_errors=True)
 print(f"\n{'TODO BIEN' if not fallos else 'FALLARON: ' + ', '.join(fallos)}")
