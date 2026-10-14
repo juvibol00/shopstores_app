@@ -54,6 +54,24 @@ jobs:
           echo "--- lo que se va a empaquetar ---"
           ls -a
 
+      # **Los dos destinos piden versiones distintas de `cryptography`.**
+      #
+      #   Android  -> 43.0.1  es la unica con las cuatro arquitecturas
+      #   Navegador-> 42.0.5  es la unica que publica el indice de Pyodide
+      #
+      # No hay una que sirva para ambos, y el pin vive en `pyproject.toml`, que es
+      # uno solo. Asi que aqui se cambia el numero justo antes de compilar, y solo
+      # en la copia que usa este trabajo: el repositorio no se toca y el APK sigue
+      # saliendo con la suya.
+      #
+      # Es un parche a conciencia. Lo correcto a futuro es que la version web no
+      # dependa de `cryptography`: esa biblioteca cifra la clave del correo, y el
+      # navegador no puede mandar correo de todas formas.
+      - name: Ajustar la version de cryptography para el navegador
+        run: |
+          sed -i 's/cryptography==43.0.1/cryptography==42.0.5/' pyproject.toml
+          grep cryptography pyproject.toml
+
       # `--base-url` es obligatorio: en GitHub Pages el sitio NO vive en la raiz
       # del dominio sino en /<repositorio>/. Sin esto la pagina carga en blanco,
       # porque busca sus propios archivos en una ruta que no existe.
