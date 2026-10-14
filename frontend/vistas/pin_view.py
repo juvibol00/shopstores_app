@@ -27,7 +27,7 @@ def _campo_pin(etiqueta, al_enviar=None):
     )
 
 
-def _sin_fallos_mudos(aviso, accion):
+def sin_fallos_mudos(aviso, accion):
     """Envuelve el boton para que un fallo inesperado **se vea**.
 
     Un error dentro de un boton no tumba la app: Flet lo anota en la consola y la
@@ -46,7 +46,7 @@ def _sin_fallos_mudos(aviso, accion):
     return envoltura
 
 
-def _marco(controles):
+def marco(controles):
     return ft.Container(
         content=ft.Column(controles, spacing=14, tight=True,
                           horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -107,9 +107,9 @@ def _configurar(page, al_entrar):
             ft.Text("Primer arranque: elige cómo vas a entrar.",
                     size=13, color=paleta.TEXTO_SUAVE,
                     text_align=ft.TextAlign.CENTER),
-            _marco([
+            marco([
                 nombre, pin, repetir, debilidad, aviso,
-                estilo.boton("Crear acceso", _sin_fallos_mudos(aviso, crear),
+                estilo.boton("Crear acceso", sin_fallos_mudos(aviso, crear),
                              ancho=260, alto=46),
                 ft.Text("El PIN no se guarda en ningún lado: se guarda una huella "
                         "con la que se puede comprobar, pero no reconstruirlo. "
@@ -140,7 +140,7 @@ def _desbloquear(page, al_entrar):
             pin.value = ""
             pin.update()
 
-    entrar = _sin_fallos_mudos(aviso, entrar)
+    entrar = sin_fallos_mudos(aviso, entrar)
     pin = _campo_pin("PIN", al_enviar=entrar)
 
     return ft.Container(
@@ -148,7 +148,7 @@ def _desbloquear(page, al_entrar):
             marca.logo(88),
             ft.Text(f"Hola, {nombre}" if nombre else "ShopStore's",
                     size=22, weight=estilo.FUERTE, color=paleta.MARCA),
-            _marco([
+            marco([
                 pin, aviso,
                 estilo.boton("Entrar", entrar, ancho=260, alto=46),
             ]),

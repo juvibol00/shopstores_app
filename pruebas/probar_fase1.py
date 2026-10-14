@@ -17,6 +17,10 @@ from PIL import Image
 
 from backend import almacenamiento
 from backend import basedatos as bd
+import postgres_local
+# La base de la app ahora es Supabase: cada suite usa una base nueva en un
+# Postgres local, con las mismas funciones que se pegan en el panel.
+_pg = postgres_local.conectar_la_app()
 from backend import fotos
 from backend import seguridad
 
@@ -75,7 +79,6 @@ check(p["nombre"] == "Cartera de cuero", "se crea y se lee")
 check(float(p["stock"]) == 10, "la existencia inicial queda en 10")
 check(len(bd.movimientos(pid)) == 1, "la existencia inicial dejo su movimiento")
 check(bd.movimientos(pid)[0]["motivo"] == "alta", "el movimiento es de tipo alta")
-check(p["sincronizado_en"] is None, "nace pendiente de sincronizar")
 
 bd.crear_producto("Pulsera tejida", "Hilo encerado", 3.0, 8.5, stock_inicial=0)
 bd.crear_producto("Billetera", "Ocho ranuras", 12.0, 22.0, stock_inicial=4)
@@ -96,8 +99,7 @@ check(sumados == 12, "la suma de los movimientos coincide con el resumen")
 check(bd.ajustar_stock(pid, 12) == 0, "ajustar al mismo total no hace nada")
 
 # El resumen es cache: si se corrompe, se reconstruye desde los movimientos.
-bd.conexion().execute("UPDATE productos SET stock = 999 WHERE id = ?", (pid,))
-bd.conexion().commit()
+_pg.sql("update productos set stock = 999 where id = cast(:i as uuid)", i=pid)
 check(bd.recalcular_stock(pid) == 12, "recalcular reconstruye desde los movimientos")
 
 try:

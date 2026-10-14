@@ -12,6 +12,10 @@ os.environ["FLET_APP_STORAGE_DATA"] = TEMPORAL
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import basedatos as bd
+import postgres_local
+# La base de la app ahora es Supabase: cada suite usa una base nueva en un
+# Postgres local, con las mismas funciones que se pegan en el panel.
+_pg = postgres_local.conectar_la_app()
 
 fallos = []
 

@@ -14,6 +14,10 @@ from PIL import Image
 
 from backend import almacenamiento
 from backend import basedatos as bd
+import postgres_local
+# La base de la app ahora es Supabase: cada suite usa una base nueva en un
+# Postgres local, con las mismas funciones que se pegan en el panel.
+_pg = postgres_local.conectar_la_app()
 from backend import catalogo
 from backend import correo
 from backend import fotos
@@ -211,9 +215,8 @@ venta_semana = bd.registrar_venta(
     [{"producto_id": peligroso, "cantidad": 1}], 620.0,
     pagos=[{"metodo_id": metodos_pago[0]["id"], "monto": 5.0}])
 desde_s, hasta_s, _ = bd.rango("semana_pasada")
-bd.conexion().execute("UPDATE ventas SET fecha = ? WHERE id = ?",
-                      (desde_s, venta_semana["id"]))
-bd.conexion().commit()
+_pg.sql("update ventas set fecha = cast(:f as timestamptz) "
+        "where id = cast(:i as uuid)", f=desde_s, i=venta_semana["id"])
 
 d2 = resumen_semanal.datos()
 html2 = resumen_semanal.cuerpo_html(d2)

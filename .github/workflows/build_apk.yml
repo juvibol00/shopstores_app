@@ -39,7 +39,7 @@ jobs:
           rm -rf datos
           # Las pruebas se quedan junto al codigo que prueban, pero no se instalan:
           # son ~100 KB que nadie va a correr en el telefono.
-          rm -rf pruebas
+          rm -rf pruebas supabase
           find . -name "__pycache__" -type d -prune -exec rm -rf {} +
           echo "--- lo que se va a empaquetar ---"
           ls -a

@@ -71,6 +71,29 @@ def _escribir(datos):
     # Reemplazo atomico: si el telefono se apaga a mitad de la escritura, queda el
     # archivo viejo entero en vez de uno a medias.
     os.replace(tmp, RUTA_CONFIG)
+    if al_cambiar is not None:
+        al_cambiar(datos)
+
+
+# **En el navegador, el disco no dura.** Lo que Python escribe ahi vive en la
+# memoria de la pestana: al recargar, `config.json` —con la sesion y el PIN—
+# desaparece. Por eso, en la version web, el frontend pone aca una funcion que
+# copia todo a la memoria propia del navegador cada vez que algo cambia, y al
+# abrir lo devuelve con `cargar`. En Android y en la computadora queda en `None`:
+# ahi el archivo si dura.
+al_cambiar = None
+
+
+def todo():
+    return _leer()
+
+
+def cargar(datos):
+    """Reemplaza todo por `datos`. Solo para lo que recupera el navegador al abrir."""
+    tmp = RUTA_CONFIG + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(datos or {}, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, RUTA_CONFIG)
 
 
 def obtener(clave, por_defecto=None):

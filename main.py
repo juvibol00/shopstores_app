@@ -37,9 +37,11 @@ SECCIONES = {
 }
 ORDEN = ["inicio", "venta", "inventario", "cobros", "metricas"]
 
-def _armar(page: ft.Page):
+async def _armar(page: ft.Page):
     # Ver la nota de arriba: estos imports viven aca para que un fallo se vea.
     from backend import basedatos
+    from backend import nube
+    from frontend import memoria_web
     from frontend import paleta
     from frontend.vistas.cobros_view import crear_vista_cobros
     from frontend.vistas.configuracion_view import crear_vista_configuracion
@@ -47,6 +49,8 @@ def _armar(page: ft.Page):
     from frontend.vistas.inicio_view import crear_vista_inicio
     from frontend.vistas.inventario_view import crear_vista_inventario
     from frontend.vistas.pin_view import crear_vista_pin
+    from frontend.vistas.sesion_view import (crear_vista_sesion,
+                                             crear_vista_sin_conexion)
     from frontend.vistas.ventas_view import crear_vista_ventas
 
     page.title = "ShopStore's"
@@ -56,7 +60,9 @@ def _armar(page: ft.Page):
     page.window.width = 380
     page.window.height = 780
 
-    basedatos.conexion()          # crea el archivo y el esquema si no existen
+    # En el navegador, la sesion y el PIN se guardan en la memoria del navegador:
+    # hay que traerlos antes de preguntar si estan.
+    await memoria_web.recuperar(page)
 
     cuerpo = ft.Container(expand=True)
     barra = {"control": None}
@@ -81,7 +87,8 @@ def _armar(page: ft.Page):
     def abrir_configuracion():
         # Configuracion no gasta pestana: se muestra sobre Inicio y vuelve ahi.
         cuerpo.content = crear_vista_configuracion(
-            page, funcion_volver=lambda: navegar("inicio"))
+            page, funcion_volver=lambda: navegar("inicio"),
+            al_cerrar_sesion=puerta)
         page.update()
 
     def cambiar(e):
@@ -90,6 +97,7 @@ def _armar(page: ft.Page):
             navegar(ORDEN[indice])
 
     def entrar():
+        basedatos.preparar_cuenta()       # la primera vez siembra los metodos
         barra["control"] = ft.NavigationBar(
             selected_index=0,
             bgcolor=paleta.TARJETA,
@@ -110,7 +118,26 @@ def _armar(page: ft.Page):
     # la del telefono. Metida aca, entra en el `SafeArea` de abajo y el sistema le
     # reserva su espacio.
     caja_barra = ft.Container()
-    cuerpo.content = crear_vista_pin(page, entrar)
+
+    def mostrar(vista):
+        caja_barra.content = None
+        barra["control"] = None
+        cuerpo.content = vista
+        page.update()
+
+    def puerta():
+        """Las dos cerraduras, en orden. **Afuera**, la sesion de Supabase: sin
+        ella no se puede leer ni guardar nada. **Adentro**, el PIN: que quien
+        agarre el telefono no entre directo a las ventas."""
+        try:
+            con_sesion = nube.hay_sesion() or nube.reanudar()
+        except nube.SinConexion:
+            mostrar(crear_vista_sin_conexion(page, puerta))
+            return
+        if con_sesion:
+            mostrar(crear_vista_pin(page, entrar))
+        else:
+            mostrar(crear_vista_sesion(page, puerta))
 
     page.add(ft.SafeArea(
         ft.Column([cuerpo, caja_barra], spacing=0, expand=True),
@@ -120,9 +147,10 @@ def _armar(page: ft.Page):
         avoid_intrusions_top=True,
         avoid_intrusions_bottom=True,
     ))
+    puerta()
 
 
-def main(page: ft.Page):
+async def main(page: ft.Page):
     """Un error de arranque tiene que verse en la pantalla del telefono. Sin esto,
     un fallo al importar deja la app en blanco y sin explicacion.
 
@@ -131,7 +159,7 @@ def main(page: ft.Page):
     error reventaria a su vez. Solo `flet` y colores escritos a mano.
     """
     try:
-        _armar(page)
+        await _armar(page)
     except Exception:
         page.controls.clear()
         page.bgcolor = "#FFFFFF"

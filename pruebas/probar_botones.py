@@ -25,6 +25,10 @@ import flet as ft
 from PIL import Image
 
 from backend import basedatos as bd
+import postgres_local
+# La base de la app ahora es Supabase: cada suite usa una base nueva en un
+# Postgres local, con las mismas funciones que se pegan en el panel.
+_pg = postgres_local.conectar_la_app()
 from backend import fotos
 from backend import seguridad
 from frontend import dialogos
@@ -547,6 +551,7 @@ print("Arranque: un import que falla se ve en pantalla, no en blanco")
 # un error distinto cada vez y ninguno visible sin abrir la consola del navegador.
 # Los imports estaban arriba de main.py y mataban a Python antes de que existiera
 # la red de errores. Aca se rompe un import a proposito y se mira la pantalla.
+import asyncio
 import importlib
 import main as arranque
 
@@ -568,7 +573,8 @@ guardado = sys.modules.get(roto)
 sys.modules[roto] = None          # asi `import` falla de verdad
 try:
     pantalla_rota = PaginaVacia()
-    arranque.main(pantalla_rota)
+    # `main` es `async`: tiene que esperar a la memoria del navegador.
+    asyncio.run(arranque.main(pantalla_rota))
     textos = [str(getattr(c, "value", "")) for c in pantalla_rota.controls]
     check(any("No se pudo arrancar" in t for t in textos),
           "en vez de quedar en blanco, dice que no pudo arrancar")

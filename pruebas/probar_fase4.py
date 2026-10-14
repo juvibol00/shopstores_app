@@ -11,6 +11,10 @@ os.environ["FLET_APP_STORAGE_DATA"] = TEMPORAL
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import basedatos as bd
+import postgres_local
+# La base de la app ahora es Supabase: cada suite usa una base nueva en un
+# Postgres local, con las mismas funciones que se pegan en el panel.
+_pg = postgres_local.conectar_la_app()
 
 fallos = []
 
@@ -142,10 +146,10 @@ _tarde = bd.datetime.combine(bd.datetime.now().astimezone().date(),
                              bd.datetime.min.time().replace(hour=23)).astimezone()
 _v = bd.registrar_venta([{"producto_id": cartera, "cantidad": 1}], TASA,
                         pagos=[{"metodo_id": efectivo, "monto": 50}])
-bd.conexion().execute("UPDATE ventas SET fecha = ? WHERE id = ?",
-                      (_tarde.astimezone(bd.timezone.utc).isoformat(
-                          timespec="milliseconds"), _v["id"]))
-bd.conexion().commit()
+_pg.sql("update ventas set fecha = cast(:f as timestamptz) "
+        "where id = cast(:i as uuid)",
+        f=_tarde.astimezone(bd.timezone.utc).isoformat(timespec="milliseconds"),
+        i=_v["id"])
 _serie = bd.serie_diaria("semana")
 _hoy_local = bd.datetime.now().astimezone().date()
 _dia = [d for d in _serie if d["dia"] == _hoy_local]
@@ -162,13 +166,8 @@ check(len(serie) == (bd.datetime.now().astimezone().date()
       "rellena los días sin ventas")
 
 print("\nSin datos no revienta")
-vacio = tempfile.mkdtemp(prefix="shopstores_vacio_")
-bd.cerrar()
-os.environ["FLET_APP_STORAGE_DATA"] = vacio
-import importlib
-from backend import almacenamiento
-importlib.reload(almacenamiento)
-importlib.reload(bd)
+# Una cuenta recien creada, sin una sola venta.
+_pg = postgres_local.conectar_la_app()
 m = bd.metricas("semana")
 check(m["vendido"] == 0 and m["neta"] == 0 and m["margen"] == 0,
       "una base vacía da ceros y no divide por cero")
@@ -176,7 +175,6 @@ check(bd.top_productos("semana") == [], "y el top sale vacío")
 bd.cerrar()
 
 shutil.rmtree(TEMPORAL, ignore_errors=True)
-shutil.rmtree(vacio, ignore_errors=True)
 print()
 print("La edad de la tasa se cuenta en hora local")
 # Fallo real: se restaba el día en UTC menos el día local. En Venezuela (UTC-4)

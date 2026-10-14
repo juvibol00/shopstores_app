@@ -11,8 +11,9 @@
 -- 2. **Tipos de verdad.** Montos en `numeric` (el `REAL` de SQLite redondea
 --    centavos), fechas en `timestamptz`, `activo` y `en_catalogo` en `boolean`.
 -- 3. **Fuera `sincronizado_en`.** Era para empujar a Neon; aca la nube es la base.
--- 4. **Las fotos ya no van dentro de la base.** En SQLite eran tres `BLOB` por
---    foto; aca la tabla guarda solo **donde estan** en Storage (paso 7).
+-- 4. **Las fotos siguen dentro de la base**, como `bytea`. Se penso en mandarlas a
+--    Storage, pero pesan tan poco (ver `producto_fotos`) que no vale la pena el
+--    viaje extra por cada imagen.
 --
 -- Se puede correr mas de una vez: lo que ya existe no se toca.
 --
@@ -41,10 +42,11 @@ create table if not exists public.producto_fotos (
     user_id         uuid not null default auth.uid() references auth.users on delete cascade,
     producto_id     uuid not null references public.productos(id) on delete cascade,
     orden           integer not null,
-    -- Rutas dentro del bucket de Storage, no la imagen (ver el punto 4).
-    ruta_miniatura  text not null,
-    ruta_catalogo   text not null,
-    ruta_completa   text not null,
+    -- Los tres tamanos que arma `backend/fotos.py`. Pesan ~3, ~10 y ~56 KB: cien
+    -- productos con tres fotos son unos 20 MB, holgado dentro de la base.
+    miniatura       bytea not null,
+    catalogo        bytea not null,
+    completa        bytea not null,
     creado_en       timestamptz not null default now(),
     unique (producto_id, orden)
 );

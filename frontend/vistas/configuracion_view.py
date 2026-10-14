@@ -13,6 +13,7 @@ import flet as ft
 from backend import basedatos
 from backend import correo
 from backend import formato
+from backend import nube
 from backend import seguridad
 from backend import respaldo
 from frontend import dialogos
@@ -21,7 +22,7 @@ from frontend import paleta
 from frontend import pantalla
 
 
-def crear_vista_configuracion(page, funcion_volver):
+def crear_vista_configuracion(page, funcion_volver, al_cerrar_sesion=None):
     contenedor = ft.Container(expand=True)
 
     def menu():
@@ -37,6 +38,9 @@ def crear_vista_configuracion(page, funcion_volver):
             contenedor.content = _correo(page, menu)
         elif cual == "respaldo":
             contenedor.content = _respaldo(page, menu)
+        elif cual == "cuenta":
+            _cerrar_sesion(page, al_cerrar_sesion)
+            return
         page.update()
 
     contenedor.content = _menu(page, funcion_volver, abrir)
@@ -80,15 +84,36 @@ def _menu(page, funcion_volver, abrir):
                      lambda e: abrir("pin")),
             _tarjeta("Tasa del día", "Se carga desde la pantalla de inicio",
                      pendiente="en Inicio"),
-            _tarjeta("Respaldo", _estado_respaldo(),
-                     lambda e: abrir("respaldo")),
+            # El respaldo copiaba el archivo de SQLite del telefono, que ya no
+            # existe: los datos estan en Supabase. Vuelve cuando se rehaga como
+            # una exportacion de la cuenta.
+            _tarjeta("Respaldo", "Se está adaptando a la nube",
+                     pendiente="pronto"),
             _tarjeta("Correo del catálogo",
                      "Configurado" if correo.configurado()
                      else "Sin configurar",
                      lambda e: abrir("correo")),
+            _tarjeta("Cuenta", nube.correo() or "Sesión abierta",
+                     lambda e: abrir("cuenta")),
         ], spacing=10, tight=True, scroll=ft.ScrollMode.AUTO),
             padding=ft.Padding(14, 14, 14, 20), expand=True),
     ], spacing=0, expand=True)
+
+
+def _cerrar_sesion(page, al_cerrar_sesion):
+    """Cierra la sesion de Supabase en este telefono. Los datos no se tocan:
+    quedan en la cuenta, y vuelven al entrar de nuevo con el correo."""
+    def cerrar():
+        nube.cerrar_sesion()
+        if al_cerrar_sesion:
+            al_cerrar_sesion()
+
+    dialogos.confirmar(
+        page, "Cerrar sesión",
+        "Este teléfono deja de tener acceso hasta que vuelvas a entrar con tu "
+        "correo y tu contraseña. Tus ventas y productos no se borran: quedan "
+        "guardados en tu cuenta.",
+        "Cerrar sesión", cerrar)
 
 
 # ==========================================================================

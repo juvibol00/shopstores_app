@@ -44,16 +44,7 @@ class SinProductos(Exception):
 
 def productos_del_catalogo(incluir_sin_stock):
     """Los marcados para el catálogo, con su foto de catálogo si la tienen."""
-    sql = ("SELECT p.id, p.nombre, p.descripcion, p.precio_usd, p.stock, "
-           "       f.catalogo AS foto "
-           "FROM productos p "
-           "LEFT JOIN producto_fotos f ON f.producto_id = p.id AND f.orden = 1 "
-           "WHERE p.activo = 1 AND p.en_catalogo = 1")
-    if not incluir_sin_stock:
-        sql += " AND p.stock > 0"
-    sql += " ORDER BY p.nombre COLLATE NOCASE"
-    with basedatos._candado:
-        return basedatos.conexion().execute(sql).fetchall()
+    return basedatos.productos_del_catalogo(incluir_sin_stock)
 
 
 def _cabecera(pdf):

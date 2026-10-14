@@ -49,7 +49,7 @@ jobs:
       # Lo mismo que en el APK: `flet build` empaqueta la carpeta tal cual.
       - name: Quitar del paquete lo que no va publicado
         run: |
-          rm -rf .git .github datos pruebas
+          rm -rf .git .github datos pruebas supabase
           find . -name "__pycache__" -type d -prune -exec rm -rf {} +
           echo "--- lo que se va a empaquetar ---"
           ls -a
