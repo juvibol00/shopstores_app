@@ -70,10 +70,21 @@ jobs:
       #    clavado: el motor que compila y el que se empaqueta tienen que ser el
       #    mismo, y ya nos costo un APK averiguarlo.
       #
-      # 3. **`sqlite3` como paquete.** Pyodide lo saca de la biblioteca estandar
-      #    para que la descarga pese menos; sin pedirlo, la app muere en la primera
-      #    linea que toca la base. Va solo en `requirements.txt`, porque la
-      #    compilacion corre con Python normal y ahi no es un paquete instalable.
+      # 3. **Tres piezas de la biblioteca estandar que en el navegador van aparte.**
+      #    Pyodide las saca para que la descarga pese menos, y hay que pedirlas:
+      #
+      #      sqlite3   la base de datos. Sin el, muere en la primera linea que la toca.
+      #      ssl       lo necesita `fpdf2` de rebote: `urllib.request` solo define
+      #                `HTTPSHandler` si `ssl` carga, y `fpdf2` lo importa al arrancar.
+      #      hashlib   la huella del PIN (`pbkdf2_hmac`). Desde Python 3.12 no tiene
+      #                version de repuesto: sin este paquete, crear el PIN revienta.
+      #
+      #    La lista sale del indice del propio Pyodide que usa Flet 0.85.3 (0.27.7),
+      #    donde estan marcados como `cpython_module`. Se cruzo contra lo que importa
+      #    la aplicacion, para no descubrirlos de a uno en cada compilacion.
+      #
+      #    Van solo en `requirements.txt`: la compilacion corre con Python normal,
+      #    donde vienen incluidos y no son paquetes instalables.
       #
       # **Hay que tocar los DOS archivos.** `pyproject.toml` manda al compilar,
       # pero el que viaja dentro del paquete y se lee **al arrancar en el
@@ -85,7 +96,7 @@ jobs:
           sed -i '/^cryptography/d' requirements.txt
           sed -i -E 's/"(pillow|fpdf2)==[0-9.]+"/"\1"/' pyproject.toml
           sed -i -E 's/^(pillow|fpdf2)==[0-9.]+$/\1/' requirements.txt
-          echo "sqlite3" >> requirements.txt
+          printf 'sqlite3\nssl\nhashlib\n' >> requirements.txt
           echo "--- dependencias con las que se compila la web ---"
           sed -n '/^dependencies/,/^]/p' pyproject.toml
           echo "--- y las que leera el navegador al arrancar ---"
