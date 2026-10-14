@@ -124,8 +124,23 @@ jobs:
       # Con 3.12 usa Pyodide 0.27.8, practicamente el mismo 0.27.7 de Flet 0.85
       # en el que se probaron los arreglos de `ssl`, `hashlib` y `sqlite3`, y con
       # los mismos paquetes (pillow 10.2.0).
+      #
+      # **Se reintenta hasta tres veces.** El empaquetador de Flet (serious_python,
+      # en la 1.0.4 y en las anteriores) elige un puerto libre abriendolo y
+      # cerrandolo **sin esperar** a que se cierre, y enseguida lo vuelve a abrir
+      # para su servidor interno. Casi siempre llega cerrado; a veces no, y la
+      # compilacion muere con `SocketException: Failed to create server socket
+      # (... shared flag ...)`. No tiene que ver con la app: es una carrera, y al
+      # repetir pasa. Paso el 14-oct-2026 en el primer intento con Flet 1.0.
       - name: Construir la version web
-        run: yes | flet build web --verbose --base-url shopstores_app --python-version 3.12
+        run: |
+          for intento in 1 2 3; do
+            if yes | flet build web --verbose --base-url shopstores_app --python-version 3.12; then
+              exit 0
+            fi
+            echo "::warning::La compilacion fallo en el intento $intento; se reintenta."
+          done
+          exit 1
 
       # **El icono del iPhone no lo hace Flet.** La compilacion genera los iconos
       # del navegador y de Android con `assets/icon.png`, pero el que usa el
