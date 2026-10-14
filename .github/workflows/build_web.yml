@@ -54,23 +54,31 @@ jobs:
           echo "--- lo que se va a empaquetar ---"
           ls -a
 
-      # **Los dos destinos piden versiones distintas de `cryptography`.**
+      # **El navegador y Android no comparten ni una sola version.**
       #
-      #   Android  -> 43.0.1  es la unica con las cuatro arquitecturas
-      #   Navegador-> 42.0.5  es la unica que publica el indice de Pyodide
+      #   paquete       Android   navegador
+      #   cryptography  43.0.1    42.0.5
+      #   pillow        12.2.0    10.2.0
       #
-      # No hay una que sirva para ambos, y el pin vive en `pyproject.toml`, que es
-      # uno solo. Asi que aqui se cambia el numero justo antes de compilar, y solo
-      # en la copia que usa este trabajo: el repositorio no se toca y el APK sigue
-      # saliendo con la suya.
+      # Los pines de `pyproject.toml` estan calculados para Android —es donde
+      # faltaban arquitecturas y donde el APK no compilaba— y el indice del
+      # navegador publica otras. Como el archivo es uno solo, aqui se les quita el
+      # numero a las tres dependencias de la aplicacion y se deja que el instalador
+      # tome la que haya. **Solo en la copia de este trabajo**: el repositorio no se
+      # toca y el APK sigue saliendo con sus versiones exactas.
       #
-      # Es un parche a conciencia. Lo correcto a futuro es que la version web no
-      # dependa de `cryptography`: esa biblioteca cifra la clave del correo, y el
-      # navegador no puede mandar correo de todas formas.
-      - name: Ajustar la version de cryptography para el navegador
+      # `flet` si queda clavado: el motor que compila y el que se empaqueta tienen
+      # que ser el mismo, y ya nos costo un APK averiguarlo.
+      #
+      # Es un parche a conciencia, no la solucion. Lo correcto a futuro es que la
+      # version web no dependa de `cryptography` —cifra la clave del correo, y el
+      # navegador no puede mandar correo de todas formas— y declarar las versiones
+      # por destino en vez de pelearlas aqui.
+      - name: Soltar los pines que son de Android
         run: |
-          sed -i 's/cryptography==43.0.1/cryptography==42.0.5/' pyproject.toml
-          grep cryptography pyproject.toml
+          sed -i -E 's/"(pillow|fpdf2|cryptography)==[0-9.]+"/"\1"/' pyproject.toml
+          echo "--- dependencias con las que se compila la web ---"
+          sed -n '/^dependencies/,/^]/p' pyproject.toml
 
       # `--base-url` es obligatorio: en GitHub Pages el sitio NO vive en la raiz
       # del dominio sino en /<repositorio>/. Sin esto la pagina carga en blanco,
