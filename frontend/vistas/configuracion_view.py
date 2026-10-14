@@ -11,16 +11,15 @@ todos los controles en una pantalla larga.
 import flet as ft
 
 from backend import basedatos
-from backend import correo
 from backend import formato
 from backend import nube
 from backend import seguridad
 from backend import respaldo
+from frontend import descargas
 from frontend import dialogos
 from frontend import estilo
 from frontend import paleta
 from frontend import pantalla
-from frontend import selector
 
 
 def crear_vista_configuracion(page, funcion_volver, al_cerrar_sesion=None):
@@ -35,8 +34,6 @@ def crear_vista_configuracion(page, funcion_volver, al_cerrar_sesion=None):
             contenedor.content = _metodos(page, menu)
         elif cual == "pin":
             contenedor.content = _cambiar_pin(page, menu)
-        elif cual == "correo":
-            contenedor.content = _correo(page, menu)
         elif cual == "respaldo":
             contenedor.content = _respaldo(page, menu)
         elif cual == "cuenta":
@@ -85,15 +82,8 @@ def _menu(page, funcion_volver, abrir):
                      lambda e: abrir("pin")),
             _tarjeta("Tasa del día", "Se carga desde la pantalla de inicio",
                      pendiente="en Inicio"),
-            # El respaldo copiaba el archivo de SQLite del telefono, que ya no
-            # existe: los datos estan en Supabase. Vuelve cuando se rehaga como
-            # una exportacion de la cuenta.
-            _tarjeta("Respaldo", "Se está adaptando a la nube",
-                     pendiente="pronto"),
-            _tarjeta("Correo",
-                     "Configurado" if correo.configurado()
-                     else "Sin configurar",
-                     lambda e: abrir("correo")),
+            _tarjeta("Respaldo", _estado_respaldo(),
+                     lambda e: abrir("respaldo")),
             _tarjeta("Cuenta", nube.correo() or "Sesión abierta",
                      lambda e: abrir("cuenta")),
         ], spacing=10, tight=True, scroll=ft.ScrollMode.AUTO),
@@ -278,90 +268,11 @@ def _cambiar_pin(page, al_volver):
 
 
 # ==========================================================================
-# El correo por donde sale el resumen semanal
-# ==========================================================================
-
-def _correo(page, al_volver):
-    """La clave de aplicación se guarda **cifrada con el PIN**, así que solo se
-    puede leer con la sesión abierta. Si venía de otro teléfono no se descifra, y
-    entonces el campo aparece vacío pidiendo que se escriba de nuevo."""
-    actual = correo.leer_configuracion()
-
-    remitente = ft.TextField(
-        label="Tu correo de Gmail", value=actual["remitente"],
-        keyboard_type=ft.KeyboardType.EMAIL,
-        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
-    clave = ft.TextField(
-        label="Clave de aplicación", value=actual["clave"] or "",
-        password=True, can_reveal_password=True,
-        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
-    destino = ft.TextField(
-        label="Destinatario habitual (opcional)", value=actual["destino"],
-        keyboard_type=ft.KeyboardType.EMAIL,
-        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
-    problema = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.ERROR)
-
-    aviso = []
-    if actual["remitente"] and actual["clave"] is None:
-        aviso.append(ft.Text(
-            "La clave guardada no se pudo leer con este PIN. Escríbela de nuevo.",
-            size=12, color=paleta.AVISO))
-
-    def guardar(e):
-        problema.value = ""
-        try:
-            correo.guardar_configuracion(remitente.value, clave.value,
-                                         destino.value)
-        except ValueError as ex:
-            problema.value = str(ex)
-            page.update()
-            return
-        dialogos.exito(page, "Correo configurado.")
-        al_volver()
-
-    def olvidar(e):
-        def borrar():
-            correo.olvidar_configuracion()
-            dialogos.exito(page, "Datos del correo borrados.")
-            al_volver()
-
-        dialogos.confirmar(
-            page, "Olvidar el correo",
-            "Se borran el remitente y la clave de aplicación de este teléfono. "
-            "El resumen semanal ya no se podrá enviar.",
-            "Olvidar", borrar, peligro=True)
-
-    acciones = [estilo.boton("Guardar", guardar, ancho=400, alto=46)]
-    if correo.configurado():
-        acciones.append(ft.TextButton(content="Olvidar estos datos",
-                                      on_click=olvidar,
-                                      style=ft.ButtonStyle(color=paleta.ERROR)))
-
-    return ft.Column([
-        _cabecera("Correo", al_volver,
-                  "Por aquí te llega el resumen semanal"),
-        ft.Container(content=ft.Column(aviso + [
-            remitente, clave, destino, problema, *acciones,
-            ft.Container(height=6),
-            estilo.apunte("Gmail no acepta la contraseña de la cuenta: hace "
-                          "falta una clave de aplicación. Se genera en la "
-                          "configuración de la cuenta de Google, en Seguridad, y "
-                          "solo aparece la opción si tienes activada la "
-                          "verificación en dos pasos."),
-            estilo.apunte("La clave se guarda cifrada con tu PIN. Si cambias el "
-                          "PIN, se vuelve a cifrar sola."),
-        ], spacing=12, tight=True, scroll=ft.ScrollMode.AUTO),
-            padding=ft.Padding(14, 16, 14, 20), expand=True),
-    ], spacing=0, expand=True)
-
-
-
-# ==========================================================================
-# El respaldo: toda la base en un archivo
+# El respaldo: todo lo de la cuenta en un archivo
 # ==========================================================================
 
 def _estado_respaldo():
-    cuando = basedatos.leer_config("respaldo_ultimo", "")
+    cuando = respaldo.ultimo()
     if not cuando:
         return "Nunca hecho"
     dia = formato.dia_local(cuando)
@@ -374,133 +285,43 @@ def _respaldo(page, al_volver):
 
 
 def _cuerpo_respaldo(page, al_volver, recargar):
-    """Guardar la base en un archivo y volver a traerla.
+    """Bajar todo lo de la cuenta en un archivo (ver `backend/respaldo.py`).
 
-    Va por correo y no «guardar en el teléfono» porque la carpeta privada de la
-    aplicación **no la ve WhatsApp ni el explorador de archivos**: un respaldo que
-    no se puede sacar del teléfono no es un respaldo. Mandándotelo a ti misma
-    queda en el correo, que se abre desde cualquier parte.
+    Se arma al tocar, no antes: con fotos son varios megas y no tiene sentido
+    traerlos cada vez que se entra a Configuracion.
     """
-    estado = {"trabajando": False}
-    configurado = correo.configurado()
-    destino = ft.TextField(
-        label="Mandármelo a", dense=True,
-        value=correo.leer_configuracion()["destino"]
-              or correo.leer_configuracion()["remitente"],
-        keyboard_type=ft.KeyboardType.EMAIL,
-        border_color=paleta.LILA, focused_border_color=paleta.MARCA)
-
-    def enviar(e):
-        if estado["trabajando"]:
-            return
-
-        def mandar():
-            estado["trabajando"] = True
-            page.update()
-
-            def trabajo():
-                datos = respaldo.armar()
-                nombre = respaldo.nombre_sugerido()
-                correo.enviar_pdf(
-                    destino.value.strip(), datos, tipo="octet-stream",
-                    asunto=f"ShopStore's · Respaldo · {nombre[-13:-3]}",
-                    cuerpo="Adjunto va el respaldo de la aplicación.\n\n"
-                           "Guarda este correo: con ese archivo se recupera todo "
-                           "en un teléfono nuevo.",
-                    nombre_archivo=nombre)
-                basedatos.escribir_config("respaldo_ultimo", basedatos.ahora())
-                return True, f"Respaldo enviado a {destino.value.strip()}."
-
-            dialogos.en_segundo_plano(page, trabajo, recargar)
-
-        dialogos.confirmar(
-            page, "Enviar el respaldo",
-            "Va toda la base en un archivo: productos, fotos, ventas, clientes y "
-            "gastos. No lleva el PIN ni la clave del correo.",
-            "Enviar", mandar)
-
-    async def elegir_archivo(e):
+    async def preparar(e):
         try:
-            archivos = await selector.de(page).pick_files(
-                dialog_title="Elige el archivo del respaldo", with_data=True)
-        except Exception as ex:
-            dialogos.error(page, f"No se pudo abrir el explorador: {ex}")
-            return
-        if not archivos:
-            return
-        _confirmar_restauracion(page, archivos[0].bytes, recargar)
-
-    bloques = [
-        estilo.tarjeta(ft.Column([
-            estilo.seccion("Lo que hay ahora"),
-            estilo.dato(f"{basedatos.contar_productos()} producto(s) · "
-                        f"{basedatos.contar_ventas()} venta(s)", size=14),
-            estilo.apunte(_estado_respaldo().lower()),
-        ], spacing=4, tight=True)),
-    ]
-
-    if configurado:
-        bloques += [
-            destino,
-            estilo.boton("Enviar el respaldo por correo", enviar,
-                         ancho=400, alto=46),
-        ]
-    else:
-        bloques.append(estilo.tarjeta(
-            ft.Column([
-                estilo.dato("Falta configurar el correo", size=13,
-                            color=paleta.AVISO),
-                estilo.apunte("Es por donde sale el respaldo del teléfono."),
-            ], spacing=2, tight=True),
-            padding=(12, 10, 12, 10), color_borde=paleta.AVISO))
-
-    bloques += [
-        ft.Divider(height=16, color=paleta.LILA),
-        estilo.seccion("Teléfono nuevo"),
-        estilo.apunte("Restaurar trae el archivo y reemplaza todo lo que haya en "
-                      "este teléfono. Es para empezar en un equipo nuevo, no para "
-                      "mezclar."),
-        ft.TextButton(content="Restaurar desde un archivo", on_click=elegir_archivo,
-                      style=ft.ButtonStyle(color=paleta.ERROR)),
-        ft.Container(height=4),
-        estilo.apunte("El archivo no lleva el PIN ni la clave del correo: están "
-                      "cifradas con una llave de este teléfono y en otro no "
-                      "servirían. Se vuelven a escribir una vez."),
-    ]
-
-    return ft.Column([
-        _cabecera("Respaldo", al_volver, "Toda la base en un archivo"),
-        ft.Container(content=ft.Column(bloques, spacing=12, tight=True,
-                                       scroll=ft.ScrollMode.AUTO),
-                     padding=ft.Padding(14, 16, 14, 20), expand=True),
-    ], spacing=0, expand=True)
-
-
-def _confirmar_restauracion(page, datos, al_terminar):
-    """Dice qué trae el archivo **antes** de reemplazar nada.
-
-    Restaurar no se deshace, y el error típico no es elegir un archivo roto sino
-    elegir uno viejo. Ver «12 productos, 3 ventas» cuando hoy tienes 40 es lo que
-    hace que la persona se detenga a tiempo.
-    """
-    try:
-        resumen = respaldo.revisar(datos)
-    except respaldo.ErrorDeRespaldo as ex:
-        dialogos.error(page, str(ex))
-        return
-
-    def hacerlo():
-        try:
-            respaldo.restaurar(datos)
-        except respaldo.ErrorDeRespaldo as ex:
+            datos, cuantos = respaldo.armar()
+        except ValueError as ex:
             dialogos.error(page, str(ex))
             return
-        dialogos.exito(page, "Respaldo restaurado.")
-        al_terminar()
 
-    dialogos.confirmar(
-        page, "Restaurar este respaldo",
-        f"El archivo trae {resumen['productos']} producto(s), "
-        f"{resumen['ventas']} venta(s) y {resumen['clientes']} cliente(s). "
-        f"Todo lo que hay hoy en el teléfono se reemplaza por eso.",
-        "Restaurar", hacerlo, peligro=True)
+        def bajado():
+            respaldo.marcar_hecho()
+            recargar()
+
+        await descargas.ofrecer(
+            page, datos, respaldo.nombre_sugerido(), respaldo.NOMBRE_EN_LA_NUBE,
+            "application/zip", "Tu respaldo está listo",
+            f"{cuantos['productos']} producto(s) con "
+            f"{cuantos['producto_fotos']} foto(s), {cuantos['clientes']} "
+            f"cliente(s), {cuantos['ventas']} venta(s) y {cuantos['gastos']} "
+            "gasto(s). Guárdalo en un lugar seguro: Drive, iCloud o tu correo.",
+            al_descargar=bajado)
+
+    return ft.Column([
+        _cabecera("Respaldo", al_volver, "Todo lo de tu cuenta en un archivo"),
+        ft.Container(content=ft.Column([
+            estilo.tarjeta(ft.Column([
+                estilo.seccion("Último respaldo"),
+                estilo.dato(_estado_respaldo(), size=15),
+            ], spacing=4, tight=True)),
+            estilo.boton("Preparar el respaldo", preparar, ancho=400, alto=46),
+            estilo.apunte("Lleva tus productos con sus fotos, clientes, ventas, "
+                          "abonos y gastos. No lleva tu PIN ni tu contraseña."),
+            estilo.apunte("Quien tenga el archivo puede ver tus ventas y tus "
+                          "clientes: guárdalo donde solo tú entres."),
+        ], spacing=12, tight=True, scroll=ft.ScrollMode.AUTO),
+            padding=ft.Padding(14, 16, 14, 20), expand=True),
+    ], spacing=0, expand=True)

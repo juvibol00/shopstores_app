@@ -248,7 +248,11 @@ def _lecturas_del_periodo(desde, hasta):
 
 def precargar_gestion(periodo):
     desde, hasta, _ = rango(periodo)
-    _de_un_viaje(*_lecturas_del_periodo(desde, hasta))
+    sp_desde, sp_hasta, _ = rango("semana_pasada")
+    # Las dos ultimas son para el boton del resumen semanal.
+    _de_un_viaje(*_lecturas_del_periodo(desde, hasta),
+                 ("resumen_ventas", {"desde": sp_desde, "hasta": sp_hasta}),
+                 ("leer_config", {"clave": "resumen_ultima_semana"}))
 
 
 def precargar_todo(tope_inventario):
@@ -913,6 +917,16 @@ def _inicio_del_dia_utc():
     ahora_local = datetime.now().astimezone()
     inicio = ahora_local.replace(hour=0, minute=0, second=0, microsecond=0)
     return inicio.astimezone(timezone.utc).isoformat(timespec="milliseconds")
+
+
+# --------------------------------------------------------------------------
+# Respaldo
+# --------------------------------------------------------------------------
+
+def exportar_respaldo():
+    """Todo lo de la cuenta, tabla por tabla (ver `respaldo.py`). No se guarda
+    en `_listo`: son megas, y se pide una vez cada tanto."""
+    return _rpc("exportar_respaldo")
 
 
 # --------------------------------------------------------------------------

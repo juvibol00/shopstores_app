@@ -184,6 +184,36 @@ def confirmar(page, titulo, explicacion, etiqueta_si, al_confirmar, peligro=Fals
     abrir(page, dialogo)
 
 
+def descargar(page, titulo, explicacion, enlace, al_descargar=None):
+    """Una ventana con el boton «Descargar» que abre `enlace`.
+
+    **El enlace lo abre la pantalla misma, dentro del toque** (`ft.OpenUrl`). En
+    el iPhone es la unica forma de bajar un archivo: si la orden pasara por
+    Python, llegaria tarde y Safari la descartaria sin avisar (ver
+    `frontend/descargas.py`). Se abre en una pestana aparte para no sacar a la
+    persona de la aplicacion.
+    """
+    def listo(e):
+        cerrar(page, dialogo)
+        if al_descargar:
+            al_descargar()
+
+    dialogo = ft.AlertDialog(
+        modal=True,
+        title=ft.Text(titulo, color=paleta.TEXTO),
+        content=ft.Text(explicacion, color=paleta.TEXTO_SUAVE),
+        actions=[
+            _boton("Cerrar", lambda e: cerrar(page, dialogo)),
+            ft.Button(content="Descargar", on_click=listo,
+                      action=ft.OpenUrl(enlace, target=ft.UrlTarget.BLANK),
+                      style=ft.ButtonStyle(bgcolor=paleta.MARCA,
+                                           color=paleta.FONDO)),
+        ],
+        bgcolor=paleta.TARJETA,
+    )
+    abrir(page, dialogo)
+
+
 def pedir_numero(page, titulo, explicacion, etiqueta_campo, valor_inicial,
                  al_aceptar, texto_vivo=None):
     """Un dialogo con un solo campo numerico.

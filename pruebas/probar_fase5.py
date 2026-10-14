@@ -148,25 +148,14 @@ except correo.ErrorDeCorreo as ex:
     check("Vuelve a escribirla" in str(ex), "una clave ilegible pide escribirla de nuevo")
 
 print()
-print("El correo del resumen semanal")
+print("El resumen semanal, para descargar")
+# Ya no va por correo: Inicio avisa y se baja un PDF. Lo que hay que cuidar es
+# lo de siempre: que avise solo si hubo ventas y una sola vez por semana.
 from backend import resumen_semanal
 
-d = resumen_semanal.datos()
-texto = resumen_semanal.cuerpo_texto(d)
-html = resumen_semanal.cuerpo_html(d)
+check(not resumen_semanal.hay_pendiente(),
+      "sin ventas la semana pasada, no avisa")
 
-check("Saludos cordiales" in texto and "Bolívar Software Company" in texto,
-      "la versión de texto saluda y firma")
-check("ShopStore's" in html and "Resumen de la semana" in html,
-      "la versión con formato lleva el nombre del negocio y el título")
-check("<table" in html and "cellpadding" in html,
-      "va armado con tablas, que es lo que respetan los correos")
-check("{{logo}}" in html, "y deja el hueco del logo para incrustarlo")
-check(resumen_semanal._logo() is not None, "el logo se encuentra en assets")
-
-# El correo presenta; el PDF informa. Las cifras van en el adjunto y no se
-# repiten en el cuerpo: leer dos veces lo mismo alarga el correo sin agregar
-# nada, y en el teléfono un correo largo se recorre sin leerse.
 peligroso = bd.crear_producto("Bolso <b>rojo</b> & negro", "", 1.0, 5.0,
                               stock_inicial=2)
 metodos_pago = bd.listar_metodos()
@@ -177,32 +166,17 @@ desde_s, hasta_s, _ = bd.rango("semana_pasada")
 _pg.sql("update ventas set fecha = cast(:f as timestamptz) "
         "where id = cast(:i as uuid)", f=desde_s, i=venta_semana["id"])
 
+check(resumen_semanal.hay_pendiente(), "con ventas la semana pasada, avisa")
 d2 = resumen_semanal.datos()
-html2 = resumen_semanal.cuerpo_html(d2)
-check(d2["metricas"]["vendido"] > 0, "hay movimiento en la semana del ejemplo")
-check("Ganancia" not in html2 and "Ingresos" not in html2,
-      "el cuerpo del correo no repite las cuentas: van en el PDF")
-check("Bolso" not in html2,
-      "ni los nombres de los productos, que además vienen escritos a mano")
-check(b"Ganancia neta" in texto_del_pdf(resumen_semanal.armar_pdf(d2)),
-      "y el PDF sí las trae")
-
-# Y el armado del mensaje: texto, formato, imagen y adjunto, en ese orden.
-mensaje = correo.armar_mensaje(
-    "vane@gmail.com", "vane@gmail.com", "Resumen", b"%PDF-falso",
-    "resumen_semanal.pdf", cuerpo=texto, html=html,
-    logo=resumen_semanal._logo())
-tipos = [p.get_content_type() for p in mensaje.walk()]
-check("text/plain" in tipos, "el correo lleva su versión de texto")
-check("text/html" in tipos, "y su versión con formato")
-check("image/png" in tipos, "con el logo dentro del propio correo")
-check("application/pdf" in tipos, "y el PDF adjunto")
-
-partes_html = [p for p in mensaje.walk() if p.get_content_type() == "text/html"]
-check("{{logo}}" not in partes_html[0].get_content(),
-      "el hueco del logo queda reemplazado por la imagen incrustada")
-check("cid:" in partes_html[0].get_content(),
-      "que se nombra como imagen interna, no como enlace de afuera")
+pdf_semana = resumen_semanal.armar_pdf(d2)
+check(pdf_semana[:5] == b"%PDF-", "el resumen sale como PDF")
+check(b"Ganancia neta" in texto_del_pdf(pdf_semana), "con las cuentas adentro")
+check(resumen_semanal.nombre_archivo(d2).startswith("resumen-semanal-")
+      and resumen_semanal.nombre_archivo(d2).endswith(".pdf"),
+      "y un nombre que dice de que semana es")
+resumen_semanal.marcar_descargado()
+check(not resumen_semanal.hay_pendiente(),
+      "una vez bajado, no vuelve a avisar esta semana")
 
 print()
 print("Sin cryptography, como en el navegador")

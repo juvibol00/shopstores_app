@@ -1,30 +1,37 @@
-"""El respaldo: toda la base en un archivo, y de vuelta.
+"""El respaldo y las descargas: todo lo de la cuenta en un archivo para bajar.
 
-Lo que se prueba no es que el archivo se escriba, sino lo que de verdad duele si
-falla: que la copia traiga **lo ultimo** que se guardo —la base trabaja en modo
-WAL y copiarla a mano se deja las ultimas ventas afuera—, que un archivo que no es
-nuestro se rechace **antes** de tocar nada, y que al restaurar vuelva exactamente
-lo que habia.
+Lo que se prueba es lo que de verdad duele si falla: que el archivo traiga
+**todo** —las fotos incluidas, enteras—, que **no** traiga la huella del PIN ni
+nada de otra cuenta, y que la descarga llegue al aparato por el camino que
+corresponde: en la web, subiendo el archivo y abriendo un enlace dentro del
+toque (lo unico que el iPhone deja); en la computadora, guardandolo directo.
 """
+import asyncio
+import base64
 import io
 import os
 import shutil
 import sys
 import tempfile
+import zipfile
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 TEMPORAL = tempfile.mkdtemp(prefix="shopstores_respaldo_")
 os.environ["FLET_APP_STORAGE_DATA"] = TEMPORAL
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import flet as ft
 from PIL import Image
 
-from backend import almacenamiento
 from backend import basedatos as bd
-from backend import correo
+import postgres_local
+_pg = postgres_local.conectar_la_app()
 from backend import fotos
+from backend import nube
 from backend import respaldo
 from backend import seguridad
+from frontend import descargas
+from frontend import selector
 
 fallos = []
 
@@ -45,116 +52,191 @@ def imagen():
 print("Armar el respaldo")
 seguridad.establecer("472913", "472913")
 bd.guardar_tasa(620.0)
-cartera = bd.crear_producto("Cartera de cuero", "Cuero natural", 20.0, 45.0,
-                            stock_inicial=5)
-bd.guardar_foto(cartera, fotos.preparar(imagen()))
-cliente = bd.crear_cliente("Ana Pérez", "0412-1234567", "")
-metodos = bd.listar_metodos()
-bd.registrar_venta([{"producto_id": cartera, "cantidad": 2}], 620.0,
-                   pagos=[{"metodo_id": metodos[0]["id"], "monto": 90.0}])
+cartera = bd.crear_producto("Cartera", "Cuero", 20.0, 45.0, stock_inicial=5)
+tamanos = fotos.preparar(imagen())
+bd.guardar_foto(cartera, tamanos)
+ana = bd.crear_cliente("Ana", "0414")
+efectivo = bd.listar_metodos()[0]["id"]
+bd.registrar_venta([{"producto_id": cartera, "cantidad": 1}], 620.0,
+                   pagos=[{"metodo_id": efectivo, "monto": 45.0}])
+bd.registrar_venta([{"producto_id": cartera, "cantidad": 1}], 620.0,
+                   tipo="credito", cliente_id=ana)
+bd.registrar_abono(ana, 10.0)
+bd.crear_gasto("Delivery", "", 3.0)
 
-copia = respaldo.armar()
-check(copia[:16] == b"SQLite format 3\x00", "sale una base de datos de verdad")
-check(len(copia) > 10_000, f"y pesa lo que debe ({len(copia) / 1024:.0f} KB)")
+# Otra cuenta en la misma base, con lo suyo: no puede aparecer en el archivo.
+otra = _pg.otro_usuario()
+otra("crear_producto", {"nombre": "De otra tienda", "descripcion": "",
+                        "costo_usd": 1, "precio_usd": 2, "en_catalogo": True})
 
-# El punto fino: la venta se acaba de registrar y en modo WAL puede estar todavia
-# en el archivo de al lado. Si el respaldo se hiciera copiando el archivo
-# principal a mano, esa venta NO estaria.
-resumen = respaldo.revisar(copia)
-check(resumen["ventas"] == 1, "la copia trae la venta recien hecha")
-check(resumen["productos"] == 1 and resumen["clientes"] == 1,
-      "y el producto y el cliente")
+contenido, cuantos = respaldo.armar()
+check(contenido[:2] == b"PK", "sale un .zip")
+with zipfile.ZipFile(io.BytesIO(contenido)) as z:
+    nombres = set(z.namelist())
+check(nombres == {"datos.json", "LEEME.txt"}, "con los datos y un LEEME")
+datos = respaldo.leer(contenido)
+check(cuantos == {"productos": 1, "producto_fotos": 1, "clientes": 1,
+                  "ventas": 2, "gastos": 1},
+      f"cuenta bien lo que trae ({cuantos})")
+check([p["nombre"] for p in datos["productos"]] == ["Cartera"],
+      "trae los productos de la cuenta, y nada de otra cuenta")
+for tabla in ("venta_lineas", "venta_pagos", "abonos", "abono_aplicaciones",
+              "movimientos_inventario", "metodos_pago"):
+    check(len(datos[tabla]) > 0, f"trae {tabla}")
+foto = datos["producto_fotos"][0]
+check(base64.b64decode(foto["completa"]) == tamanos["completa"]
+      and base64.b64decode(foto["miniatura"]) == tamanos["miniatura"],
+      "las fotos vienen enteras, byte por byte")
+check("pin" not in datos["configuracion"]
+      and "472913" not in contenido.decode("latin-1"),
+      "no lleva la huella del PIN")
+check(datos["configuracion"].get("tasa_bcv") is not None,
+      "pero si la configuracion de la tienda (la tasa)")
+check(all("user_id" not in fila for fila in datos["productos"] + datos["ventas"]),
+      "sin el id del usuario, que no le dice nada a quien lea el archivo")
+check(respaldo.nombre_sugerido().startswith("respaldo-shopstores-")
+      and respaldo.nombre_sugerido().endswith(".zip"), "nombre con la fecha")
 
-print("\nEl nombre del archivo")
-from datetime import datetime, timezone, timedelta
-nombre = respaldo.nombre_sugerido(
-    datetime(2026, 10, 9, 23, 30, tzinfo=timezone(timedelta(hours=-4))))
-check(nombre == "respaldo-shopstores-2026-10-09.db",
-      f"lleva la fecha local, no la de UTC ({nombre})")
+check(respaldo.ultimo() is None, "antes de bajarlo, figura como nunca hecho")
+respaldo.marcar_hecho()
+check(respaldo.ultimo() is not None, "y al bajarlo queda anotado")
 
-print("\nLo que NO se acepta")
-for malo, motivo in [
-    (b"", "un archivo vacío"),
-    (b"esto no es una base de datos", "un archivo cualquiera"),
-    (b"SQLite format 3\x00" + b"\x00" * 200, "una base sin nuestras tablas"),
-]:
-    try:
-        respaldo.revisar(malo)
-        check(False, f"rechaza {motivo}")
-    except respaldo.ErrorDeRespaldo:
-        check(True, f"rechaza {motivo}")
 
-# Una base de SQLite legitima pero de otro programa.
-import sqlite3
-ajena = os.path.join(TEMPORAL, "ajena.db")
-c = sqlite3.connect(ajena)
-c.execute("CREATE TABLE cosas (id INTEGER)")
-c.commit()
-c.close()
+print("\nSubir a la carpeta privada y pedir el enlace")
+# Sin red: se mira que pedido se armaria. La carpeta lleva el id del usuario,
+# que es lo que el RLS de Storage exige para dejar escribir.
+pedidos = []
+http_real = nube._http
+
+
+def http_falso(metodo, ruta, cuerpo=None, token=None, reintentable=False,
+               archivo=None, tipo=None, extra=None):
+    pedidos.append({"metodo": metodo, "ruta": ruta, "cuerpo": cuerpo,
+                    "archivo": archivo, "tipo": tipo, "extra": extra,
+                    "token": token})
+    if "/object/sign/" in ruta:
+        return 200, '{"signedURL": "/object/sign/descargas/u-1/respaldo.zip?token=abc"}'
+    return 200, '{"Key": "descargas/u-1/respaldo.zip"}'
+
+
+import time  # noqa: E402
+nube._http = http_falso
+nube._sesion.update(token="t", refresh="r", vence=time.time() + 3600,
+                    usuario="u-1")
 try:
-    respaldo.revisar(open(ajena, "rb").read())
-    check(False, "rechaza una base de otro programa")
-except respaldo.ErrorDeRespaldo:
-    check(True, "rechaza una base de otro programa")
+    nube.subir_archivo("respaldo.zip", contenido, "application/zip")
+    subida = pedidos[-1]
+    check(subida["ruta"] == "/storage/v1/object/descargas/u-1/respaldo.zip",
+          "sube a la carpeta del usuario")
+    check(subida["archivo"] == contenido and subida["tipo"] == "application/zip",
+          "el archivo va tal cual, con su tipo")
+    check(subida["extra"] == {"x-upsert": "true"} and subida["token"] == "t",
+          "reemplaza al anterior, con la sesion")
+    enlace = nube.enlace_de_descarga("respaldo.zip", "respaldo-shopstores-2026-10-14.zip")
+    check(enlace.startswith(nube.URL + "/storage/v1/object/sign/descargas/u-1/"),
+          "el enlace firmado apunta al archivo")
+    check(enlace.endswith("&download=respaldo-shopstores-2026-10-14.zip"),
+          "y baja con el nombre con fecha")
+    check(pedidos[-1]["cuerpo"] == {"expiresIn": 3600}, "y vence en una hora")
 
-print("\nRestaurar")
-# Se cambia todo despues de hacer la copia, para ver que de verdad vuelve atras.
-bd.crear_producto("Producto de después", "", 1.0, 2.0, stock_inicial=1)
-bd.crear_cliente("Cliente de después", "", "")
-check(bd.contar_productos() == 2, "antes de restaurar hay 2 productos")
+    nube._sesion.update(usuario=None)
+    try:
+        nube.subir_archivo("x.zip", b"x", "application/zip")
+        check(False, "sin usuario no sube nada")
+    except nube.SinSesion:
+        check(True, "sin usuario no sube nada")
+finally:
+    nube._http = http_real
+    nube._sesion.update(token=None, refresh=None, vence=0.0, usuario=None)
 
-vuelto = respaldo.restaurar(copia)
-check(vuelto["productos"] == 1, "restaurar dice cuántos productos trae")
-check(bd.contar_productos() == 1, "y la base vuelve a tener 1")
-check([c["nombre"] for c in bd.listar_clientes()] == ["Ana Pérez"],
-      "el cliente de después desapareció")
-check(bd.contar_ventas() == 1, "la venta sigue ahí")
-check(len(bd.listar_fotos(bd.listar_productos()[0]["id"])) == 1,
-      "y la foto del producto también: viaja dentro de la base")
 
-# La base anterior se guarda al lado, por si el archivo elegido era el viejo.
-check(os.path.exists(almacenamiento.RUTA_BASE_DATOS + ".anterior"),
-      "la base que había queda guardada como .anterior")
+print("\nDescargar: en la computadora se guarda directo")
 
-print("\nEl correo del respaldo")
-correo.guardar_configuracion("tienda@gmail.com", "abcdefghijklmnop", "")
-mensaje = correo.armar_mensaje(
-    "tienda@gmail.com", "tienda@gmail.com", "Respaldo", copia,
-    "respaldo-shopstores-2026-10-09.db", cuerpo="Adjunto va el respaldo.",
-    tipo="octet-stream")
-tipos = [p.get_content_type() for p in mensaje.walk()]
-check("application/octet-stream" in tipos,
-      "el adjunto NO va como PDF: es una base de datos")
-adjuntos = [p for p in mensaje.walk()
-            if p.get_filename() == "respaldo-shopstores-2026-10-09.db"]
-check(len(adjuntos) == 1, "y viaja con el nombre que lleva la fecha")
-check(adjuntos[0].get_payload(decode=True) == copia,
-      "el archivo llega entero, byte por byte")
 
-print()
-print("Heredar la base con el nombre viejo")
-# Error real: al renombrar la aplicacion se cambio el nombre del archivo de la
-# base, y al abrir no encontro nada y empezo de cero. Los datos estaban al lado,
-# en el archivo viejo, pero en pantalla se veia igual que haberlos perdido.
-viejo = os.path.join(TEMPORAL, "vanesstore.db")
-nuevo = os.path.join(TEMPORAL, "heredada.db")
-almacenamiento._NOMBRE_ANTERIOR = viejo
-almacenamiento.RUTA_BASE_DATOS = nuevo
+class Pagina:
+    platform = ft.PagePlatform.WINDOWS
+    web = False
 
-open(viejo, "wb").write(copia)
-almacenamiento._heredar_la_base_vieja()
-check(os.path.exists(nuevo) and not os.path.exists(viejo),
-      "una base con el nombre anterior se adopta con el nombre nuevo")
-check(open(nuevo, "rb").read() == copia, "y llega entera")
+    def __init__(self):
+        self.overlay, self.services = [], []
 
-# Si ya hay una con el nombre nuevo no se pisa: aunque este vacia, es la que la
-# persona esta usando, y pisarla seria peor que no hacer nada.
-open(viejo, "wb").write(b"la vieja")
-open(nuevo, "wb").write(b"la que vale")
-almacenamiento._heredar_la_base_vieja()
-check(open(nuevo, "rb").read() == b"la que vale",
-      "y si ya hay una con el nombre nuevo, NO se pisa")
-check(os.path.exists(viejo), "la vieja se queda donde esta, sin borrarse")
+    def update(self):
+        pass
+
+
+class SelectorFalso:
+    def __init__(self, ruta):
+        self.ruta = ruta
+        self.pedido = None
+
+    async def save_file(self, **opciones):
+        self.pedido = opciones
+        return self.ruta
+
+
+page = Pagina()
+destino = os.path.join(TEMPORAL, "respaldo.zip")
+selector.preparar(page)
+falso = SelectorFalso(destino)
+selector._por_pagina[id(page)]["selector"] = falso
+avisado = []
+asyncio.run(descargas.ofrecer(page, contenido, "respaldo-x.zip", "respaldo.zip",
+                              "application/zip", "Tu respaldo", "texto",
+                              al_descargar=lambda: avisado.append(True)))
+check(falso.pedido["file_name"] == "respaldo-x.zip", "propone el nombre con fecha")
+check(open(destino, "rb").read() == contenido, "y el archivo queda guardado entero")
+check(avisado == [True], "y recien ahi se anota como hecho")
+
+falso.ruta = None                       # la persona cancela
+avisado.clear()
+asyncio.run(descargas.ofrecer(page, contenido, "r.zip", "respaldo.zip",
+                              "application/zip", "t", "x",
+                              al_descargar=lambda: avisado.append(True)))
+check(avisado == [], "si cancela, no se anota nada")
+
+
+if descargas.PUEDE_ENLAZAR:
+    print("\nDescargar: en la web, un enlace que se abre dentro del toque")
+    web = Pagina()
+    web.web = True
+    subidos = []
+    sub_real, enl_real = nube.subir_archivo, nube.enlace_de_descarga
+    nube.subir_archivo = lambda n, d, t: subidos.append((n, d, t))
+    nube.enlace_de_descarga = lambda n, v: f"https://enlace/{n}?download={v}"
+
+    # `OpenUrl` busca en la pagina el servicio que abre enlaces. En la app esa
+    # pagina existe; aca la pagina es de mentira, y se le presta uno.
+    import flet.controls.services.url_launcher as lanzador
+
+    class _ServicioDePrueba:
+        _i = 1
+
+    servicio_real = lanzador.shared_service
+    lanzador.shared_service = lambda tipo: _ServicioDePrueba()
+    try:
+        avisado.clear()
+        asyncio.run(descargas.ofrecer(web, contenido, "respaldo-x.zip",
+                                      "respaldo.zip", "application/zip",
+                                      "Tu respaldo está listo", "texto",
+                                      al_descargar=lambda: avisado.append(True)))
+    finally:
+        nube.subir_archivo, nube.enlace_de_descarga = sub_real, enl_real
+        lanzador.shared_service = servicio_real
+    check(subidos == [("respaldo.zip", contenido, "application/zip")],
+          "sube el archivo a la nube")
+    ventana = next((c for c in web.overlay if isinstance(c, ft.AlertDialog)), None)
+    check(ventana is not None, "y muestra la ventana para bajarlo")
+    boton = next((b for b in (ventana.actions if ventana else [])
+                  if getattr(b, "content", None) == "Descargar"), None)
+    check(boton is not None and isinstance(boton.action, ft.OpenUrl),
+          "el boton Descargar abre el enlace por su cuenta, dentro del toque")
+    check(boton is not None and boton.action.url
+          == "https://enlace/respaldo.zip?download=respaldo-x.zip",
+          "el enlace es el del archivo recien subido")
+    check(avisado == [], "todavia no se anota: falta que lo toque")
+    if boton is not None:
+        boton.on_click(None)
+    check(avisado == [True], "al tocar Descargar se anota como hecho")
 
 bd.cerrar()
 shutil.rmtree(TEMPORAL, ignore_errors=True)

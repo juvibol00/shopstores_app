@@ -1049,6 +1049,60 @@ $$;
 drop function if exists public.productos_del_catalogo(jsonb);
 
 -- ---------------------------------------------------------------------------
+-- Respaldo
+-- ---------------------------------------------------------------------------
+
+-- Todo lo de la cuenta, tabla por tabla, para guardarlo en un archivo (ver
+-- `backend/respaldo.py`). Las fotos van en base64. Sin `user_id`: es siempre el
+-- mismo y no le dice nada a quien lea el archivo.
+--
+-- **No lleva la huella del PIN.** No sirve para recuperar nada, y con ella en la
+-- mano se puede intentar adivinar el PIN sin limite de intentos.
+create or replace function public.exportar_respaldo(p jsonb) returns jsonb
+language sql stable security invoker set search_path = '' as $$
+    select jsonb_build_object(
+        'version', 1,
+        'creado_en', now(),
+        'productos', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id'
+                                                order by t.creado_en)
+                                 from public.productos t), '[]'::jsonb),
+        'producto_fotos', coalesce((select jsonb_agg(jsonb_build_object(
+                'id', t.id, 'producto_id', t.producto_id, 'orden', t.orden,
+                'creado_en', t.creado_en,
+                'miniatura', encode(t.miniatura, 'base64'),
+                'catalogo', encode(t.catalogo, 'base64'),
+                'completa', encode(t.completa, 'base64')))
+                                 from public.producto_fotos t), '[]'::jsonb),
+        'movimientos_inventario', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id'
+                                                order by t.fecha)
+                                 from public.movimientos_inventario t), '[]'::jsonb),
+        'clientes', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id'
+                                                order by t.creado_en)
+                                 from public.clientes t), '[]'::jsonb),
+        'ventas', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id'
+                                                order by t.correlativo)
+                                 from public.ventas t), '[]'::jsonb),
+        'venta_lineas', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id')
+                                 from public.venta_lineas t), '[]'::jsonb),
+        'metodos_pago', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id'
+                                                order by t.orden)
+                                 from public.metodos_pago t), '[]'::jsonb),
+        'venta_pagos', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id')
+                                 from public.venta_pagos t), '[]'::jsonb),
+        'abonos', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id'
+                                                order by t.fecha)
+                                 from public.abonos t), '[]'::jsonb),
+        'abono_aplicaciones', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id')
+                                 from public.abono_aplicaciones t), '[]'::jsonb),
+        'gastos', coalesce((select jsonb_agg(to_jsonb(t) - 'user_id'
+                                                order by t.fecha)
+                                 from public.gastos t), '[]'::jsonb),
+        'configuracion', coalesce((select jsonb_object_agg(t.clave, t.valor)
+                                     from public.configuracion t
+                                    where t.clave <> 'pin'), '{}'::jsonb))
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Varias lecturas en un solo viaje
 -- ---------------------------------------------------------------------------
 

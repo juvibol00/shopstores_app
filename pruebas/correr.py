@@ -23,8 +23,7 @@ SUITES = [
     ("Fase 3 · clientes y cobros", "probar_fase3.py"),
     ("Fase 4 · métricas y gastos", "probar_fase4.py"),
     ("Fase 5 · correo y cifrado", "probar_fase5.py"),
-    # Fase 6 (respaldo en archivo) sale hasta que el respaldo se rehaga contra
-    # Supabase: copiaba el archivo de SQLite del telefono, que ya no existe.
+    ("Fase 6 · respaldo y descargas", "probar_fase6.py"),
     ("Los botones hacen lo que dicen", "probar_botones.py"),
 ]
 

@@ -78,16 +78,23 @@ class ErrorRemoto(Exception):
 # El viaje por la red
 # --------------------------------------------------------------------------
 
-def _http(metodo, ruta, cuerpo=None, token=None, reintentable=False):
+def _http(metodo, ruta, cuerpo=None, token=None, reintentable=False,
+          archivo=None, tipo=None, extra=None):
     """Devuelve `(estado, texto)`. Un estado de error **no** es una excepcion:
     lo decide quien llama. Solo la falta de red lo es.
 
-    `reintentable` dice si se puede mandar dos veces sin dano (una lectura). Ver
-    `_http_directo`."""
-    encabezados = {"apikey": CLAVE_PUBLICA, "Content-Type": "application/json"}
+    `cuerpo` va como JSON; `archivo` (bytes) va tal cual, con su `tipo`, para
+    subir un archivo. `reintentable` dice si se puede mandar dos veces sin dano
+    (una lectura). Ver `_http_directo`."""
+    encabezados = {"apikey": CLAVE_PUBLICA,
+                   "Content-Type": tipo or "application/json"}
     if token:
         encabezados["Authorization"] = f"Bearer {token}"
-    datos = json.dumps(cuerpo) if cuerpo is not None else None
+    encabezados.update(extra or {})
+    if archivo is not None:
+        datos = archivo
+    else:
+        datos = json.dumps(cuerpo).encode("utf-8") if cuerpo is not None else None
     if EN_NAVEGADOR:
         return _http_navegador(metodo, URL + ruta, datos, encabezados)
     return _http_directo(metodo, ruta, datos, encabezados, reintentable)
@@ -120,10 +127,8 @@ def _http_directo(metodo, ruta, datos, encabezados, reintentable):
                 _conexion["c"] = http.client.HTTPSConnection(
                     URL.split("://", 1)[1], timeout=30)
             try:
-                _conexion["c"].request(
-                    metodo, ruta,
-                    body=datos.encode("utf-8") if datos is not None else None,
-                    headers=encabezados)
+                _conexion["c"].request(metodo, ruta, body=datos,
+                                       headers=encabezados)
                 respuesta = _conexion["c"].getresponse()
                 texto = respuesta.read().decode("utf-8", "replace")
                 _conexion["usada"] = time.monotonic()
@@ -142,7 +147,13 @@ def _http_navegador(metodo, url, datos, encabezados):
     for nombre, valor in encabezados.items():
         pedido.setRequestHeader(nombre, valor)
     try:
-        pedido.send(datos)
+        if datos is None:
+            pedido.send()
+        else:
+            # Los bytes de Python no cruzan solos al navegador: `to_js` los
+            # convierte en un Uint8Array, que XMLHttpRequest manda tal cual.
+            from pyodide.ffi import to_js
+            pedido.send(to_js(datos))
     except Exception:
         raise SinConexion(SIN_CONEXION) from None
     if pedido.status == 0:               # el navegador no llego al servidor
@@ -161,7 +172,8 @@ def _json(texto):
 # La sesion
 # --------------------------------------------------------------------------
 
-_sesion = {"token": None, "vence": 0.0, "refresh": None, "correo": None}
+_sesion = {"token": None, "vence": 0.0, "refresh": None, "correo": None,
+          "usuario": None}
 
 
 def _quedarse_con(respuesta):
@@ -174,6 +186,7 @@ def _quedarse_con(respuesta):
         vence=time.time() + float(respuesta.get("expires_in") or 3600),
         refresh=respuesta["refresh_token"],
         correo=usuario.get("email") or _sesion["correo"],
+        usuario=usuario.get("id") or _sesion["usuario"],
     )
     almacenamiento.guardar(CLAVE_SESION, {"refresh": _sesion["refresh"],
                                           "correo": _sesion["correo"]})
@@ -291,3 +304,55 @@ def llamar(nombre, datos=None, lectura=False):
     error = _json(texto) or {}
     raise ErrorRemoto(error.get("code"), error.get("message") or texto[:200],
                       error.get("hint"))
+
+
+# --------------------------------------------------------------------------
+# Archivos para descargar (Supabase Storage)
+# --------------------------------------------------------------------------
+#
+# En el iPhone, Safari solo deja bajar un archivo si la orden sale dentro del
+# toque. Lo que si se puede dentro del toque es abrir un enlace. Por eso el
+# archivo se sube aca y se baja con un enlace firmado: ver
+# `supabase/03_descargas.sql` y `frontend/descargas.py`.
+
+CARPETA = "descargas"
+
+
+def _ruta_propia(nombre):
+    """`<usuario>/<nombre>`: el RLS solo deja tocar la carpeta propia."""
+    _token()                         # de paso, deja la sesion vigente
+    if not _sesion["usuario"]:
+        raise SinSesion("La sesión se cerró. Vuelve a entrar con tu correo.")
+    return f"{_sesion['usuario']}/{nombre}"
+
+
+def subir_archivo(nombre, datos, tipo):
+    """Sube `datos` a la carpeta propia, reemplazando el que hubiera."""
+    ruta = _ruta_propia(nombre)
+    estado, texto = _http("POST", f"/storage/v1/object/{CARPETA}/{ruta}",
+                          token=_token(), archivo=datos, tipo=tipo,
+                          extra={"x-upsert": "true"})
+    if not 200 <= estado < 300:
+        error = _json(texto) or {}
+        raise ErrorDeNube("No se pudo preparar el archivo. "
+                          f"({error.get('message') or estado})")
+
+
+def enlace_de_descarga(nombre, nombre_visible, segundos=3600):
+    """Un enlace que baja el archivo con `nombre_visible` y vence en `segundos`.
+
+    Sirve sin sesion —por eso se puede abrir en el navegador—, pero solo hasta
+    que vence, y nadie mas lo conoce.
+    """
+    from urllib.parse import quote
+    ruta = _ruta_propia(nombre)
+    estado, texto = _http("POST", f"/storage/v1/object/sign/{CARPETA}/{ruta}",
+                          {"expiresIn": segundos}, token=_token())
+    respuesta = _json(texto) or {}
+    firmado = respuesta.get("signedURL") or respuesta.get("signedUrl")
+    if not 200 <= estado < 300 or not firmado:
+        raise ErrorDeNube("No se pudo preparar el enlace de descarga. "
+                          f"({respuesta.get('message') or estado})")
+    separador = "&" if "?" in firmado else "?"
+    return (f"{URL}/storage/v1{firmado}{separador}"
+            f"download={quote(nombre_visible)}")

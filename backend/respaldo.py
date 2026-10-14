@@ -1,152 +1,79 @@
-"""El respaldo: toda la base en un archivo, sin nube y sin cuentas.
+"""El respaldo: todo lo de la cuenta en un archivo que se guarda una misma.
 
-**Por que un archivo y no un servidor.** La copia en Neon se saco a proposito: el
-telefono es el unico dueno de los datos, y un respaldo que depende de una cuenta,
-de internet y de que alguien pague el hospedaje es un respaldo que el dia malo no
-esta. Un archivo se manda por correo, se guarda en el computador, se copia a un
-pendrive. Si el telefono se pierde, se reinstala la aplicacion, se abre el archivo
-y todo vuelve.
+Los datos viven en Supabase, pero el plan gratis no deja bajar copias. Este
+archivo es lo que protege contra un borrado por error o contra perder la cuenta:
+productos con sus fotos, clientes, ventas con sus pagos, abonos, gastos y los
+metodos de pago, tal como estan.
 
-**Que lleva adentro.** La base entera: productos, fotos, ventas, clientes, abonos,
-gastos y la configuracion de la tienda. Las fotos viven dentro de la base, asi que
-no hay nada suelto que se pueda olvidar.
+Es un `.zip` con dos cosas adentro:
 
-**Que NO lleva.** El PIN ni la clave del correo. Estan cifradas con una llave que
-sale del PIN de *este* telefono, asi que en otro no servirian de nada; al restaurar
-se vuelven a escribir una vez. Eso tambien significa que **el archivo no sirve para
-entrar a la aplicacion de nadie**: sin el PIN no abre.
+- `datos.json`: cada tabla como una lista, con las fotos en base64. Lo arma una
+  sola funcion de Supabase (`exportar_respaldo`), en un solo viaje.
+- `LEEME.txt`: que es el archivo y que hacer con el, para quien lo encuentre
+  dentro de un año en la carpeta de descargas.
 
-**La copia se hace con el motor, no copiando el archivo a mano.** La base trabaja
-en modo WAL: lo ultimo escrito puede estar todavia en un archivo aparte, y copiar
-solo el principal da una copia a la que le faltan las ultimas ventas. `backup()` de
-sqlite3 resuelve justo eso —espera a que la base este consistente y la escribe
-entera—, ademas de no romperse si alguien guarda algo mientras tanto.
+**No lleva la huella del PIN** (no sirve para recuperar nada y facilita
+adivinarlo), ni la sesion, ni contrasenas.
+
+Por ahora solo se baja: no hay boton para restaurar. Si algun dia hace falta, el
+archivo tiene todo lo necesario, con los mismos ids.
 """
 
-import os
-import sqlite3
-import tempfile
+import io
+import json
+import zipfile
 from datetime import datetime
 
-from backend import almacenamiento
 from backend import basedatos
 
-# Lo que tiene que estar adentro para considerarlo un respaldo de esta aplicacion.
-# Si falta una sola, el archivo es de otro programa o esta roto.
-TABLAS = ("productos", "ventas", "venta_lineas", "clientes", "gastos",
-          "metodos_pago", "configuracion")
+# Lo que se cuenta en la pantalla para decir que trae el archivo.
+LO_QUE_SE_CUENTA = ("productos", "producto_fotos", "clientes", "ventas", "gastos")
 
+NOMBRE_EN_LA_NUBE = "respaldo.zip"
 
-class ErrorDeRespaldo(Exception):
-    """Fallo al armar o al restaurar. El mensaje esta escrito para mostrarlo."""
+LEEME = """ShopStore's - respaldo
+
+Este archivo es una copia de todo lo que tenias en la aplicacion el dia que lo
+bajaste: productos con sus fotos, clientes, ventas con sus pagos, abonos y gastos.
+
+Guardalo en un lugar seguro (Google Drive, iCloud, tu correo). Quien lo tenga
+puede ver tus ventas y tus clientes, asi que no lo compartas.
+
+No lleva tu PIN ni tu contrasena.
+
+Los datos estan en datos.json. Si algun dia hay que recuperarlos, ese archivo
+tiene todo lo necesario.
+"""
 
 
 def nombre_sugerido(cuando=None):
-    """`respaldo-shopstores-2026-10-10.db`. La fecha va primero en anio-mes-dia
-    para que los respaldos se ordenen solos en cualquier carpeta."""
-    cuando = cuando or datetime.now().astimezone()
-    return f"respaldo-shopstores-{cuando.strftime('%Y-%m-%d')}.db"
+    """`respaldo-shopstores-2026-10-14.zip`, con la fecha del telefono."""
+    dia = (cuando or datetime.now().astimezone()).date().isoformat()
+    return f"respaldo-shopstores-{dia}.zip"
 
 
 def armar():
-    """Devuelve los bytes de una copia consistente de la base."""
-    destino = os.path.join(tempfile.mkdtemp(prefix="respaldo_"), "copia.db")
-    try:
-        copia = sqlite3.connect(destino)
-        try:
-            basedatos.conexion().backup(copia)
-        finally:
-            copia.close()
-        with open(destino, "rb") as archivo:
-            return archivo.read()
-    except sqlite3.Error as ex:
-        raise ErrorDeRespaldo(f"No se pudo armar el respaldo: {ex}")
-    finally:
-        try:
-            os.remove(destino)
-            os.rmdir(os.path.dirname(destino))
-        except OSError:
-            pass
+    """Devuelve `(bytes_del_zip, cuantos)`: el archivo y cuantas filas trae de
+    cada cosa importante, para mostrarlo antes de bajarlo."""
+    datos = basedatos.exportar_respaldo()
+    salida = io.BytesIO()
+    with zipfile.ZipFile(salida, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("datos.json", json.dumps(datos, ensure_ascii=False, indent=1))
+        z.writestr("LEEME.txt", LEEME)
+    cuantos = {tabla: len(datos.get(tabla) or []) for tabla in LO_QUE_SE_CUENTA}
+    return salida.getvalue(), cuantos
 
 
-def revisar(datos):
-    """Comprueba que los bytes sean una base de esta aplicacion.
-
-    Se mira **antes** de tocar nada. Restaurar reemplaza todo lo que hay en el
-    telefono: hacerlo con un archivo equivocado no se deshace.
-
-    Devuelve un resumen para poder decir que trae, que es lo que permite a la
-    persona darse cuenta de que eligio el archivo que no era.
-    """
-    if not datos or datos[:16] != b"SQLite format 3\x00":
-        raise ErrorDeRespaldo("Ese archivo no es un respaldo de la aplicacion.")
-
-    carpeta = tempfile.mkdtemp(prefix="revisar_")
-    ruta = os.path.join(carpeta, "copia.db")
-    try:
-        with open(ruta, "wb") as archivo:
-            archivo.write(datos)
-        c = sqlite3.connect(ruta)
-        c.row_factory = sqlite3.Row
-        try:
-            hay = {f["name"] for f in c.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'")}
-            faltan = [t for t in TABLAS if t not in hay]
-            if faltan:
-                raise ErrorDeRespaldo(
-                    "Ese archivo no es un respaldo de la aplicacion.")
-            return {
-                "productos": c.execute(
-                    "SELECT COUNT(*) FROM productos WHERE activo = 1"
-                ).fetchone()[0],
-                "ventas": c.execute("SELECT COUNT(*) FROM ventas").fetchone()[0],
-                "clientes": c.execute(
-                    "SELECT COUNT(*) FROM clientes WHERE activo = 1"
-                ).fetchone()[0],
-            }
-        finally:
-            c.close()
-    except sqlite3.Error:
-        raise ErrorDeRespaldo("Ese archivo no se puede leer: esta danado.")
-    finally:
-        for sobra in (ruta, carpeta):
-            try:
-                os.remove(sobra) if os.path.isfile(sobra) else os.rmdir(sobra)
-            except OSError:
-                pass
+def leer(contenido):
+    """Lo que hay adentro de un respaldo, como diccionario. Para revisarlo."""
+    with zipfile.ZipFile(io.BytesIO(contenido)) as z:
+        return json.loads(z.read("datos.json").decode("utf-8"))
 
 
-def restaurar(datos):
-    """Reemplaza la base del telefono por la del archivo. No se deshace.
+def marcar_hecho():
+    basedatos.escribir_config("respaldo_ultimo", basedatos.ahora())
 
-    Se revisa primero, se guarda la base actual al lado con el nombre terminado en
-    `.anterior` —por si el archivo elegido resulta ser viejo— y recien ahi se
-    escribe la nueva.
-    """
-    resumen = revisar(datos)
 
-    basedatos.cerrar()
-    ruta = almacenamiento.RUTA_BASE_DATOS
-    anterior = ruta + ".anterior"
-    try:
-        if os.path.exists(ruta):
-            if os.path.exists(anterior):
-                os.remove(anterior)
-            os.replace(ruta, anterior)
-        with open(ruta, "wb") as archivo:
-            archivo.write(datos)
-        # Los archivos del modo WAL son de la base vieja: si se quedan, el motor
-        # intenta aplicarlos encima de la nueva.
-        for sobra in (ruta + "-wal", ruta + "-shm"):
-            if os.path.exists(sobra):
-                os.remove(sobra)
-    except OSError as ex:
-        raise ErrorDeRespaldo(f"No se pudo escribir la base restaurada: {ex}")
-
-    # Se vuelve a abrir aca mismo: si el archivo estuviera roto, es mejor saberlo
-    # ahora y no cuando la persona toque la primera pantalla.
-    try:
-        basedatos.conexion()
-    except sqlite3.Error as ex:
-        raise ErrorDeRespaldo(f"La base restaurada no abre: {ex}")
-    return resumen
+def ultimo():
+    """Cuando se bajo el ultimo, en ISO UTC, o `None`."""
+    return basedatos.leer_config("respaldo_ultimo") or None

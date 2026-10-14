@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 import flet as ft
 
 from backend import basedatos
-from backend import correo
+from frontend import descargas
 from frontend import dialogos
 from frontend import estilo
 from backend import formato
@@ -168,45 +168,26 @@ def _tarjeta_credito():
 
 
 def _boton_resumen(page, al_terminar):
-    """Manda el resumen de la semana pasada, se haya mandado ya o no.
+    """Baja el resumen de la semana pasada, se haya bajado ya o no.
 
     En Inicio aparece solo cuando está pendiente; aquí está siempre, para poder
-    reenviarlo o mandárselo a otra dirección.
+    bajarlo de nuevo.
     """
-    if not correo.configurado():
-        return estilo.apunte("Configura el correo para poder enviarte el resumen "
-                             "semanal.")
-
     # Sin ventas la semana pasada no hay nada que contar. Se dice en vez de dejar
-    # un botón que manda un correo en ceros.
-    d = resumen_semanal.datos()
-    if d["metricas"]["ventas"] == 0:
-        return estilo.apunte(f"Sin ventas del {d['titulo']}: no hay resumen "
-                             f"semanal que enviar todavía.")
+    # un botón que baja un PDF en ceros.
+    if resumen_semanal.ventas_de_la_semana() == 0:
+        return estilo.apunte(f"Sin ventas del {resumen_semanal.titulo()}: no hay "
+                             f"resumen semanal todavía.")
 
-    ya = resumen_semanal.ultimo_enviado() == resumen_semanal.marcador()
+    ya = resumen_semanal.ultimo_descargado() == resumen_semanal.marcador()
 
-    def enviar(e):
-        d = resumen_semanal.datos()
-
-        def mandar():
-            def trabajo():
-                resumen_semanal.enviar()
-                return True, "Resumen enviado."
-
-            dialogos.en_segundo_plano(page, trabajo, al_terminar)
-
-        dialogos.confirmar(
-            page, "Resumen de la semana pasada",
-            f"Semana del {d['titulo']}. "
-            f"Ganancia neta {formato.dinero(d['metricas']['neta'])} en "
-            f"{d['metricas']['ventas']} venta(s).",
-            "Enviar", mandar)
+    async def descargar(e):
+        await descargas.resumen_semanal(page, al_terminar)
 
     return ft.TextButton(
-        content=("Reenviar el resumen semanal" if ya
-                 else "Enviarme el resumen semanal"),
-        on_click=enviar, style=ft.ButtonStyle(color=paleta.MARCA))
+        content=("Descargar de nuevo el resumen semanal" if ya
+                 else "Descargar el resumen semanal"),
+        on_click=descargar, style=ft.ButtonStyle(color=paleta.MARCA))
 
 
 def _resumen(page, estado, al_cambiar, al_ver_gastos):

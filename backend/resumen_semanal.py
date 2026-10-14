@@ -1,4 +1,4 @@
-"""El resumen de la semana, por correo.
+"""El resumen de la semana, en un PDF para descargar.
 
 Se conserva de SELL-B, y con él la lección que allá salió cara y está escrita en su
 propio código:
@@ -13,19 +13,18 @@ manda, sino **el rango de la consulta**. Mandarlo un miércoles reporta exactame
 la misma semana que mandarlo el lunes. La única guarda de verdad es no repetir el
 envío dentro de la misma semana, y para eso se guarda el marcador `2026-W36`.
 
-En el teléfono no se manda solo: no hay servicio en segundo plano, y disparar un
-correo por datos móviles sin avisar es más intrusivo que en una computadora que
-está siempre encendida. La app deja el aviso en Inicio y se manda con un toque.
+**Ya no se manda por correo.** Al abrir la app, Inicio avisa «¡Tu resumen
+semanal está listo!» y se baja con un toque (ver `frontend/descargas.py`). Asi
+no hace falta configurar Gmail ni nada que corra solo en segundo plano. El aviso
+sigue ahi hasta que se baje, sea lunes o jueves: es la misma guarda de arriba.
 """
 
-import os
 from datetime import datetime, timedelta
 
 
 from backend import basedatos
 from backend import formato
 from backend import pdf as hoja
-from backend import correo
 
 MORADO = (107, 78, 155)
 GRIS = (110, 102, 121)
@@ -33,43 +32,64 @@ NEGRO = (39, 34, 46)
 VERDE = (74, 124, 89)
 ROJO = (180, 83, 75)
 
+NOMBRE_EN_LA_NUBE = "resumen.pdf"
+
+
 def marcador(fecha=None):
-    """`2026-W36`. Es lo que impide mandar dos veces la misma semana."""
+    """`2026-W36`. Es lo que impide avisar dos veces la misma semana."""
     fecha = fecha or datetime.now().astimezone().date()
     año, semana, _ = fecha.isocalendar()
     return f"{año}-W{semana:02d}"
 
 
-def ultimo_enviado():
+def ultimo_descargado():
     return basedatos.leer_config("resumen_ultima_semana", "")
 
 
 def hay_pendiente():
-    """Hay resumen por mandar si la semana en curso todavía no se envió **y** la
-    semana pasada tuvo movimiento. Un correo que dice «cero» todas las semanas
-    deja de leerse."""
-    if ultimo_enviado() == marcador():
+    """Hay resumen por bajar si esta semana todavía no se bajó **y** la semana
+    pasada tuvo movimiento. Un aviso que dice «cero» todas las semanas deja de
+    leerse."""
+    if ultimo_descargado() == marcador():
         return False
-    # Solo cuantas ventas hubo, no el resumen entero: esto se pregunta cada vez
-    # que se abre Inicio, y armar el resumen eran seis viajes a Supabase.
+    return ventas_de_la_semana() > 0
+
+
+def ventas_de_la_semana():
+    """Cuantas ventas hubo la semana pasada. Solo eso, no el resumen entero:
+    se pregunta cada vez que se abre Inicio o Gestion, y armar el resumen son
+    seis consultas."""
     desde, hasta, _ = basedatos.rango("semana_pasada")
-    return basedatos.resumen_ventas(desde, hasta)["ventas"] > 0
+    return basedatos.resumen_ventas(desde, hasta)["ventas"]
 
 
-def marcar_enviado():
+def titulo():
+    """`lunes 5 de octubre al domingo 11 de octubre`. Sale de la fecha del
+    telefono, sin consultar nada."""
+    desde, hasta, _ = basedatos.rango("semana_pasada")
+    primero = datetime.fromisoformat(desde).astimezone().date()
+    ultimo = datetime.fromisoformat(hasta).astimezone().date() - timedelta(days=1)
+    return f"{formato.dia_largo(primero)} al {formato.dia_largo(ultimo)}"
+
+
+def marcar_descargado():
     basedatos.escribir_config("resumen_ultima_semana", marcador())
+
+
+def nombre_archivo(d):
+    """`resumen-semanal-2026-10-05.pdf`, con el lunes de esa semana."""
+    lunes = datetime.fromisoformat(d["desde"]).astimezone().date().isoformat()
+    return f"resumen-semanal-{lunes}.pdf"
 
 
 def datos():
     """Todo lo que va en el resumen, de la semana pasada completa."""
     desde, hasta, _ = basedatos.rango("semana_pasada")
     basedatos.precargar_semana(desde, hasta)       # las seis, en un viaje
-    primero = datetime.fromisoformat(desde).astimezone().date()
-    ultimo = datetime.fromisoformat(hasta).astimezone().date() - timedelta(days=1)
     return {
         "desde": desde,
         "hasta": hasta,
-        "titulo": f"{formato.dia_largo(primero)} al {formato.dia_largo(ultimo)}",
+        "titulo": titulo(),
         "metricas": basedatos.metricas(desde=desde, hasta=hasta,
                                        etiqueta="La semana pasada"),
         "top": basedatos.top_productos(limite=5, desde=desde, hasta=hasta),
@@ -178,107 +198,3 @@ def armar_pdf(d=None):
 # --------------------------------------------------------------------------
 # El correo
 # --------------------------------------------------------------------------
-
-def cuerpo_texto(d):
-    """La versión sin formato. **No es un descarte**: es la que se ve en los
-    programas de correo que no muestran el formato, así que dice lo mismo."""
-    return "\n".join([
-        "Saludos cordiales,",
-        "",
-        f"Este es el cierre de la semana del {d['titulo']}. El detalle completo "
-        "va en el PDF adjunto.",
-        "",
-        "--",
-        "Mensaje generado automáticamente por ShopStore's.",
-        "No hace falta responder a esta dirección.",
-        "Bolívar Software Company.",
-    ])
-
-
-def cuerpo_html(d):
-    """El correo con formato, en la línea de los de SELL-B: tarjeta blanca, el
-    logo arriba y un pie institucional.
-
-    **Las cifras no van aquí, van en el PDF.** Repetirlas en el cuerpo obliga a
-    leer dos veces lo mismo, y un correo largo en el teléfono se recorre sin
-    leerse. El correo presenta; el PDF informa.
-    """
-    raya = "border-top:1px solid #DCCDF0;"
-
-    return f"""<html><body style="margin:0;padding:24px 12px;
-background:#F1EBFA;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0"
-       style="max-width:600px;background:#FFFFFF;border-radius:12px;">
-<tr><td style="padding:32px 34px 34px;">
-
-  <table width="100%" cellpadding="0" cellspacing="0"><tr>
-    <td width="46" style="padding-right:12px;">
-      <img src="{{{{logo}}}}" width="46" height="46" alt=""
-           style="display:block;border-radius:11px;">
-    </td>
-    <td>
-      <p style="margin:0;color:#6B4E9B;font-size:19px;font-weight:bold;
-                letter-spacing:.3px;">ShopStore's</p>
-      <p style="margin:2px 0 0;color:#9A91A8;font-size:12px;">
-        Resumen semanal</p>
-    </td>
-  </tr></table>
-
-  <div style="margin:26px 0 22px;{raya}"></div>
-
-  <p style="margin:0;color:#27222E;font-size:21px;font-weight:bold;">
-    Resumen de la semana</p>
-  <p style="margin:4px 0 22px;color:#6E6679;font-size:14px;">{d['titulo']}</p>
-
-  <p style="margin:0;color:#6E6679;font-size:14px;line-height:1.6;">
-    Saludos cordiales,<br><br>
-    Este es el cierre de la semana pasada. El detalle completo va en el PDF
-    adjunto.
-  </p>
-
-  <div style="margin:30px 0 14px;border-top:1px dashed #DCCDF0;"></div>
-  <p style="margin:0;color:#9A91A8;font-size:11px;line-height:1.6;
-            text-align:center;">
-    Mensaje generado automáticamente por ShopStore's.<br>
-    No hace falta responder a esta dirección.<br>
-    <span style="color:#B8AEC6;">Bolívar Software Company</span>
-  </p>
-
-</td></tr></table>
-</td></tr></table>
-</body></html>"""
-
-
-def _logo():
-    """Los bytes del icono, para que viajen dentro del correo. Si el archivo no
-    está, el correo sale igual: sin imagen, no roto."""
-    ruta = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "assets", "icon.png")
-    try:
-        with open(ruta, "rb") as archivo:
-            return archivo.read()
-    except OSError:
-        return None
-
-
-def enviar(destino=None):
-    """Arma el resumen y lo manda. Devuelve el resumen para poder mostrarlo.
-
-    Solo se marca como enviado **si el correo salió**. Si falla, la semana sigue
-    pendiente y se puede reintentar: perder el resumen por un corte de red es
-    justamente lo que pasaba en SELL-B.
-    """
-    d = datos()
-    destino = (destino or correo.leer_configuracion()["destino"]
-               or correo.leer_configuracion()["remitente"])
-    correo.enviar_pdf(
-        destino, armar_pdf(d),
-        asunto=f"ShopStore's · Resumen de la semana · {d['titulo']}",
-        cuerpo=cuerpo_texto(d),
-        html=cuerpo_html(d),
-        logo=_logo(),
-        nombre_archivo="resumen_semanal.pdf")
-    marcar_enviado()
-    return d

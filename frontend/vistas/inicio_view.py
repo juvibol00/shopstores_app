@@ -20,7 +20,7 @@ import flet as ft
 
 from backend import basedatos
 from backend import perfil
-from backend import correo
+from frontend import descargas
 from frontend import dialogos
 from frontend import estilo
 from backend import formato
@@ -167,46 +167,28 @@ def _franja(titulo, detalle, color, accion=None, al_tocar=None):
 
 
 def _aviso_resumen(page, al_terminar):
-    """El resumen de la semana pasada, cuando todavía no se mandó.
+    """«¡Tu resumen semanal está listo!», cuando hay uno sin bajar.
 
-    No se manda solo: en el teléfono no hay servicio en segundo plano, y disparar un
-    correo por datos móviles sin avisar es más intrusivo que en una computadora
-    encendida todo el día. Pero **tampoco se pierde la semana**: el aviso sigue ahí
-    hasta que se toque, sea lunes o jueves. Es la corrección de un error que en
-    SELL-B costó semanas enteras sin reporte.
+    No se manda solo ni por correo: se avisa al abrir la app y se baja con un
+    toque. Pero **tampoco se pierde la semana**: el aviso sigue ahí hasta que se
+    baje, sea lunes o jueves. Es la corrección de un error que en SELL-B costó
+    semanas enteras sin reporte.
     """
     try:
-        # El correo primero: se mira en el telefono, sin viajar. Sin correo
-        # (siempre, en la web) no hay aviso que mostrar.
-        if not correo.configurado() or not resumen_semanal.hay_pendiente():
+        if not resumen_semanal.hay_pendiente():
             return []
     except Exception:
         # Un fallo calculando el resumen no puede impedir que Inicio abra.
         return []
 
-    d = resumen_semanal.datos()
-
-    def enviar(e):
-        def mandar():
-            # El correo tarda, así que va a otro hilo.
-            def trabajo():
-                resumen_semanal.enviar()
-                return True, "Resumen de la semana enviado."
-
-            dialogos.en_segundo_plano(page, trabajo, al_terminar)
-
-        dialogos.confirmar(
-            page, "Enviar el resumen",
-            f"Semana del {d['titulo']}. "
-            f"Ganancia neta {formato.dinero(d['metricas']['neta'])} en "
-            f"{d['metricas']['ventas']} venta(s).",
-            "Enviármelo", mandar)
+    async def descargar(e):
+        await descargas.resumen_semanal(page, al_terminar)
 
     return [_franja(
-        "Resumen de la semana pasada",
-        f"{d['titulo']} · listo para enviar",
+        "¡Tu resumen semanal está listo!",
+        f"Semana del {resumen_semanal.titulo()}",
         paleta.MARCA_CLARA,
-        accion=ft.TextButton(content="Enviármelo", on_click=enviar,
+        accion=ft.TextButton(content="Descargar", on_click=descargar,
                              style=ft.ButtonStyle(color=paleta.MARCA)))]
 
 
