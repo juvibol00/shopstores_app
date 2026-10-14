@@ -272,6 +272,53 @@ check("text/plain" in tipos_cat and "text/html" in tipos_cat
 check("image/png" not in tipos_cat,
       "y sin logo incrustado, que también identificaría el negocio")
 
+print()
+print("Sin cryptography, como en el navegador")
+# En el navegador `cryptography` no carga: su parte en Rust no se deja abrir. La app
+# tiene que entrar igual —el PIN usa hashlib, que si esta— y solo apagar el correo.
+# Se simula poniendo el modulo en None: asi `import cryptography` falla de verdad.
+import importlib
+for nombre in [n for n in sys.modules if n == "cryptography" or n.startswith("cryptography.")]:
+    del sys.modules[nombre]
+sys.modules["cryptography"] = None
+sys.modules["cryptography.fernet"] = None
+try:
+    importlib.reload(seguridad)
+    importlib.reload(correo)
+
+    check(seguridad.CIFRADO_DISPONIBLE is False, "detecta que no hay cifrado")
+
+    almacenamiento.borrar("pin")
+    seguridad.establecer("583927", "583927")
+    seguridad.cerrar_sesion()
+    check(seguridad.verificar("583927"), "el PIN se crea y se verifica igual")
+    check(not seguridad.verificar("000000"), "y un PIN malo sigue sin entrar")
+
+    try:
+        seguridad.cifrar("una clave")
+        check(False, "no guarda secretos en claro")
+    except seguridad.PinInvalido:
+        check(True, "no guarda secretos en claro")
+    check(seguridad.descifrar("cualquier cosa") is None,
+          "y leer un secreto devuelve nada en vez de reventar")
+
+    check(correo.disponible() is False, "el correo se declara no disponible")
+    check(correo.configurado() is False, "y nunca figura como configurado")
+    try:
+        correo.guardar_configuracion("tienda@gmail.com", "abcdefghijklmnop")
+        check(False, "configurar el correo se rechaza con un mensaje claro")
+    except ValueError as ex:
+        check("no se puede" in str(ex),
+              "configurar el correo se rechaza con un mensaje claro")
+finally:
+    # Se devuelve todo como estaba, para no contaminar lo que venga despues.
+    del sys.modules["cryptography"]
+    del sys.modules["cryptography.fernet"]
+    importlib.reload(seguridad)
+    importlib.reload(correo)
+
+check(seguridad.CIFRADO_DISPONIBLE is True, "al volver, el cifrado esta de nuevo")
+
 bd.cerrar()
 shutil.rmtree(TEMPORAL, ignore_errors=True)
 print(f"\n{'TODO BIEN' if not fallos else 'FALLARON: ' + ', '.join(fallos)}")

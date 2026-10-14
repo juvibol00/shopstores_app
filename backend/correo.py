@@ -33,8 +33,20 @@ class ErrorDeCorreo(Exception):
     """Falló el envío. El mensaje está escrito para mostrarlo tal cual."""
 
 
+def disponible():
+    """Si esta version puede mandar correo.
+
+    En el navegador no: la clave de Gmail no se puede guardar cifrada (ver
+    `seguridad.CIFRADO_DISPONIBLE`) y ademas un navegador no deja abrir la
+    conexion directa que usa `smtplib`. Las pantallas preguntan esto antes de
+    ofrecer el envio, para no mostrar un boton que despues va a fallar.
+    """
+    return seguridad.CIFRADO_DISPONIBLE
+
+
 def configurado():
-    return bool(almacenamiento.obtener("correo_remitente")
+    return bool(disponible()
+                and almacenamiento.obtener("correo_remitente")
                 and almacenamiento.obtener("correo_clave_app"))
 
 
@@ -48,6 +60,8 @@ def leer_configuracion():
 
 
 def guardar_configuracion(remitente, clave, destino=""):
+    if not disponible():
+        raise ValueError("En esta versión no se puede configurar el correo.")
     remitente = (remitente or "").strip()
     destino = (destino or "").strip()
     if not CORREO_VALIDO.match(remitente):

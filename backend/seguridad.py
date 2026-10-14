@@ -18,7 +18,20 @@ import hashlib
 import hmac
 import os
 
-from cryptography.fernet import Fernet, InvalidToken
+# **El cifrado es opcional; el PIN no.** La huella del PIN sale de `hashlib`, que es
+# biblioteca estandar y funciona en todos lados. `cryptography` solo hace falta para
+# cifrar la clave de Gmail, y en el navegador no carga: su parte compilada en Rust
+# no se deja abrir ahi. Como desde el navegador tampoco se puede mandar correo, no
+# se pierde nada: sin `cryptography` la app entra igual y solo se apaga el correo.
+try:
+    from cryptography.fernet import Fernet, InvalidToken
+    CIFRADO_DISPONIBLE = True
+except ImportError:
+    Fernet = None
+    CIFRADO_DISPONIBLE = False
+
+    class InvalidToken(Exception):
+        """Reemplazo inofensivo: sin cifrado nunca se lanza."""
 
 from backend import almacenamiento
 
@@ -145,8 +158,14 @@ def parece_debil(pin):
 # --------------------------------------------------------------------------
 
 def _abrir_sesion(pin):
-    """Deriva la llave de cifrado y la deja en memoria mientras dure la sesion."""
+    """Deriva la llave de cifrado y la deja en memoria mientras dure la sesion.
+
+    Sin `cryptography` no hay llave que derivar: el PIN ya se comprobo con su
+    huella y se entra igual. Lo unico que queda sin funcionar es guardar secretos.
+    """
     global _llave
+    if not CIFRADO_DISPONIBLE:
+        return
     guardado = almacenamiento.obtener("pin") or {}
     hexa = guardado.get("sal_cifrado")
     if not hexa:
@@ -172,6 +191,10 @@ def sesion_abierta():
 
 def cifrar(texto):
     """Devuelve el texto cifrado, listo para guardar. Requiere sesion abierta."""
+    if not CIFRADO_DISPONIBLE:
+        # Antes que guardar la clave en claro, no se guarda: una clave de Gmail
+        # legible en el disco da permiso para mandar correo en tu nombre.
+        raise PinInvalido("En esta versión no se pueden guardar claves.")
     if _llave is None:
         raise PinInvalido("La sesión no está abierta.")
     return _llave.encrypt((texto or "").encode("utf-8")).decode("ascii")
