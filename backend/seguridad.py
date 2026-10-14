@@ -9,13 +9,26 @@ Las 200.000 vueltas no son decoracion: son lo que hace que probar los diez mil
 PIN de cuatro digitos tarde, en vez de resolverse en un segundo. Por eso ademas se
 exigen **seis digitos como minimo**.
 
-Mas adelante (Fase 6) esta misma derivacion va a producir la llave que cifra la
-credencial de Neon. Por eso se guardan la sal y las vueltas, y no solo la huella.
+Esta misma derivacion produce la llave que cifra la clave de Gmail (ver
+`cifrar`). Por eso se guardan la sal y las vueltas, y no solo la huella.
+
+**La huella vive en la cuenta, no en el aparato.** Se guarda en la configuracion
+de la cuenta en Supabase, protegida por el RLS como todo lo demas: un PIN creado
+una vez sirve en cualquier telefono donde se entre con ese correo, y cambiarlo en
+uno lo cambia en todos. Antes vivia en `config.json` de cada aparato, y cada
+telefono nuevo hacia crear el perfil de nuevo. `_leer_pin` sube solo la huella
+vieja la primera vez.
+
+Los secretos cifrados (la clave de Gmail) **si** siguen en cada aparato: se usan
+solo en Android y en la computadora. Si el PIN se cambia en otro aparato, la
+clave guardada en este ya no se puede descifrar y la pantalla del correo la pide
+de nuevo (ver `descifrar`).
 """
 
 import base64
 import hashlib
 import hmac
+import json
 import os
 
 # **El cifrado es opcional; el PIN no.** La huella del PIN sale de `hashlib`, que es
@@ -34,6 +47,7 @@ except ImportError:
         """Reemplazo inofensivo: sin cifrado nunca se lanza."""
 
 from backend import almacenamiento
+from backend import basedatos
 
 VUELTAS = 200_000
 LARGO_MINIMO = 6
@@ -87,8 +101,42 @@ def validar_propuesta(pin, repeticion=None):
     return pin
 
 
+CLAVE_PIN = "pin"
+
+
+def _leer_pin():
+    """La huella guardada en la cuenta, o `None` si la cuenta todavia no tiene PIN.
+
+    Si la cuenta no tiene pero **este aparato** tiene una de antes —de cuando
+    vivia en cada aparato—, se sube a la cuenta y se borra de aca. Asi nadie
+    tiene que volver a crear su perfil al actualizar. Si dos aparatos tenian PIN
+    distintos, queda el del primero que se abra.
+    """
+    texto = basedatos.leer_config(CLAVE_PIN)
+    if texto:
+        try:
+            return json.loads(texto)
+        except ValueError:
+            return None
+    viejo = almacenamiento.obtener(CLAVE_PIN)
+    if viejo:
+        _guardar_pin(viejo)
+        almacenamiento.borrar(CLAVE_PIN)
+        return viejo
+    return None
+
+
+def _guardar_pin(datos):
+    basedatos.escribir_config(CLAVE_PIN, json.dumps(datos))
+
+
+def huella_guardada():
+    """Lo que queda guardado del PIN. Para las pruebas: que no este en claro."""
+    return _leer_pin()
+
+
 def hay_pin():
-    return bool(almacenamiento.obtener("pin"))
+    return bool(_leer_pin())
 
 
 def establecer(pin, repeticion=None):
@@ -99,17 +147,18 @@ def establecer(pin, repeticion=None):
     # Dos sales distintas a proposito: si fueran la misma, la huella guardada en
     # claro seria una pista sobre la llave que cifra los secretos.
     sal_cifrado = os.urandom(16)
-    almacenamiento.guardar("pin", {
+    guardado = {
         "sal": sal.hex(),
         "sal_cifrado": sal_cifrado.hex(),
         "vueltas": VUELTAS,
         "huella": _derivar(pin, sal).hex(),
-    })
-    _abrir_sesion(pin)
+    }
+    _guardar_pin(guardado)
+    _abrir_sesion(pin, guardado)
 
 
 def verificar(pin):
-    guardado = almacenamiento.obtener("pin")
+    guardado = _leer_pin()
     if not guardado:
         return False
     try:
@@ -125,7 +174,7 @@ def verificar(pin):
     # coinciden, y ese tiempo filtra informacion sobre la huella.
     if not hmac.compare_digest(calculada, esperada):
         return False
-    _abrir_sesion((pin or "").strip())
+    _abrir_sesion((pin or "").strip(), guardado)
     return True
 
 
@@ -175,7 +224,7 @@ def parece_debil(pin):
 # Cifrado de secretos
 # --------------------------------------------------------------------------
 
-def _abrir_sesion(pin):
+def _abrir_sesion(pin, guardado):
     """Deriva la llave de cifrado y la deja en memoria mientras dure la sesion.
 
     Sin `cryptography` no hay llave que derivar: el PIN ya se comprobo con su
@@ -184,14 +233,13 @@ def _abrir_sesion(pin):
     global _llave
     if not CIFRADO_DISPONIBLE:
         return
-    guardado = almacenamiento.obtener("pin") or {}
     hexa = guardado.get("sal_cifrado")
     if not hexa:
         # Base creada antes de que existiera el cifrado: se le agrega la sal ahora.
         # No se puede reusar la del PIN sin debilitar las dos.
         sal_cifrado = os.urandom(16)
         guardado["sal_cifrado"] = sal_cifrado.hex()
-        almacenamiento.guardar("pin", guardado)
+        _guardar_pin(guardado)
     else:
         sal_cifrado = bytes.fromhex(hexa)
     bruta = _derivar(pin, sal_cifrado, int(guardado.get("vueltas", VUELTAS)))

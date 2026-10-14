@@ -89,7 +89,7 @@ check(not seguridad.sesion_abierta(), "y la deja cerrada")
 check(seguridad.verificar("472913"), "el PIN correcto entra")
 check(seguridad.descifrar(secreto) == "abcd efgh ijkl mnop", "y vuelve a descifrar")
 
-guardado = almacenamiento.obtener("pin")
+guardado = seguridad.huella_guardada()
 check(guardado["sal"] != guardado["sal_cifrado"], "la sal del PIN y la del cifrado difieren")
 
 print("\nConfiguración del correo")

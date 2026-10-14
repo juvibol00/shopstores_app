@@ -62,10 +62,40 @@ seguridad.establecer("472913", "472913")
 check(seguridad.hay_pin(), "queda establecido")
 check(seguridad.verificar("472913"), "acepta el correcto")
 check(not seguridad.verificar("472914"), "rechaza el incorrecto")
-guardado = almacenamiento.obtener("pin")
+guardado = seguridad.huella_guardada()
 check("472913" not in str(guardado), "el PIN NO queda guardado en claro")
 check(len(guardado["huella"]) == 64 and len(guardado["sal"]) == 32,
       "guarda huella de 32 bytes y sal de 16")
+
+print("\nPerfil en la cuenta, no en el aparato")
+# Fallo real: el nombre y el PIN vivian en cada aparato. Juan creo su perfil en
+# la computadora, entro con el mismo correo en el iPhone, y tuvo que crearlo de
+# nuevo. Ahora viven en la cuenta.
+from backend import perfil
+perfil.guardar_nombre("  Juan  ")
+check(almacenamiento.obtener("pin") is None, "la huella no queda en el aparato")
+almacenamiento.cargar({})            # otro aparato: nada guardado localmente
+check(seguridad.hay_pin(), "otro aparato con la misma cuenta ya tiene PIN")
+check(seguridad.verificar("472913"), "y entra con el mismo PIN")
+check(perfil.nombre() == "Juan", "y lo saluda por su nombre, sin espacios")
+otra_cuenta = _pg.otro_usuario()
+check(otra_cuenta("leer_config", {"clave": "pin"}) is None,
+      "otra cuenta no ve esta huella: cada cuenta su perfil")
+
+# Un aparato con el perfil de antes, de cuando vivia en `config.json`.
+viejo_pin = seguridad.huella_guardada()
+_pg_vieja = postgres_local.conectar_la_app()          # cuenta sin perfil
+almacenamiento.cargar({"pin": viejo_pin, "nombre_usuario": "Vane"})
+check(seguridad.hay_pin(), "el perfil viejo del aparato se reconoce")
+check(seguridad.verificar("472913"), "y su PIN de siempre sigue sirviendo")
+check(perfil.nombre() == "Vane", "con su nombre")
+check(almacenamiento.obtener("pin") is None
+      and almacenamiento.obtener("nombre_usuario") is None,
+      "y se mudo a la cuenta: el aparato ya no lo guarda")
+almacenamiento.cargar({})
+check(seguridad.verificar("472913") and perfil.nombre() == "Vane",
+      "otro aparato de esa cuenta ya lo encuentra")
+seguridad.establecer("472913", "472913")      # deja todo como estaba para lo que sigue
 check(seguridad.parece_debil("130900") is not None, "avisa que 130900 parece fecha")
 check(seguridad.parece_debil("111111") is not None, "avisa digitos repetidos")
 check(seguridad.parece_debil("123456") is not None, "avisa digitos corridos")

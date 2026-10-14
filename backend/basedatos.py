@@ -148,9 +148,18 @@ def _hoy_local():
     return datetime.now().astimezone().date().isoformat()
 
 
+def precargar_puerta():
+    """La pantalla del PIN: si la cuenta ya tiene PIN, y el nombre para saludar."""
+    _de_un_viaje(
+        ("leer_config", {"clave": "pin"}),
+        ("leer_config", {"clave": "nombre_usuario"}),
+    )
+
+
 def precargar_inicio():
     sp_desde, sp_hasta, _ = rango("semana_pasada")
     _de_un_viaje(
+        ("leer_config", {"clave": "nombre_usuario"}),
         ("leer_config", {"clave": "tasa_bcv"}),
         ("leer_config", {"clave": "tasa_actualizada_en"}),
         ("leer_config", {"clave": "resumen_ultima_semana"}),

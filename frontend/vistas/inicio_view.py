@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 
 import flet as ft
 
-from backend import almacenamiento
 from backend import basedatos
+from backend import perfil
 from backend import correo
 from frontend import dialogos
 from frontend import estilo
@@ -274,7 +274,7 @@ def _avisos(resumen):
 def crear_vista_inicio(page, funcion_navegar, funcion_configuracion):
     # Todo lo que esta pantalla va a leer, en un solo viaje a Supabase.
     basedatos.precargar_inicio()
-    nombre = almacenamiento.obtener("nombre_usuario", "")
+    nombre = perfil.nombre()
     resumen = basedatos.resumen_inventario()
     hoy = basedatos.resumen_de_hoy()
 

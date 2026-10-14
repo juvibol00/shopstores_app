@@ -1,13 +1,16 @@
 """La puerta: configurar el acceso la primera vez, y desbloquear despues.
 
-Ni el nombre ni el PIN estan escritos en el codigo. La primera vez que se abre la
-app, el dueno los elige. Del PIN solo se guarda su huella (ver `seguridad.py`), asi
-que ni siquiera esta app puede volver a leerlo.
+Ni el nombre ni el PIN estan escritos en el codigo. La primera vez que se usa la
+cuenta, el dueno los elige, y quedan **en la cuenta**: en cualquier otro aparato
+donde entre con su correo, la app ya lo saluda por su nombre y le pide ese mismo
+PIN. Del PIN solo se guarda su huella (ver `seguridad.py`), asi que ni siquiera
+esta app puede volver a leerlo.
 """
 
 import flet as ft
 
-from backend import almacenamiento
+from backend import basedatos
+from backend import perfil
 from frontend import estilo
 from frontend import marca
 from frontend import paleta
@@ -59,6 +62,7 @@ def marco(controles):
 
 def crear_vista_pin(page, al_entrar):
     """Devuelve la pantalla que corresponda: configurar o desbloquear."""
+    basedatos.precargar_puerta()        # si hay PIN y el nombre: un viaje
     if seguridad.hay_pin():
         return _desbloquear(page, al_entrar)
     return _configurar(page, al_entrar)
@@ -96,7 +100,7 @@ def _configurar(page, al_entrar):
             aviso.value = str(ex)
             aviso.update()
             return
-        almacenamiento.guardar("nombre_usuario", nombre.value.strip())
+        perfil.guardar_nombre(nombre.value)
         al_entrar()
 
     return ft.Container(
@@ -104,7 +108,8 @@ def _configurar(page, al_entrar):
             marca.logo(88),
             ft.Text("ShopStore's", size=24, weight=estilo.FUERTE,
                     color=paleta.MARCA),
-            ft.Text("Primer arranque: elige cómo vas a entrar.",
+            ft.Text("Primera vez con esta cuenta: elige cómo vas a entrar. "
+                    "Sirve en cualquier teléfono donde entres con tu correo.",
                     size=13, color=paleta.TEXTO_SUAVE,
                     text_align=ft.TextAlign.CENTER),
             marco([
@@ -129,7 +134,7 @@ def _configurar(page, al_entrar):
 def _desbloquear(page, al_entrar):
     aviso = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.ERROR,
                     text_align=ft.TextAlign.CENTER)
-    nombre = almacenamiento.obtener("nombre_usuario", "")
+    nombre = perfil.nombre()
 
     def entrar(e):
         if seguridad.verificar(pin.value):
