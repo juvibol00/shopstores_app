@@ -74,11 +74,19 @@ jobs:
       # version web no dependa de `cryptography` —cifra la clave del correo, y el
       # navegador no puede mandar correo de todas formas— y declarar las versiones
       # por destino en vez de pelearlas aqui.
+      # **Hay que soltarlos en los DOS archivos.** `pyproject.toml` manda al
+      # compilar, pero el que viaja dentro del paquete y se lee **al arrancar en
+      # el navegador** es `requirements.txt`. Soltar solo el primero deja una web
+      # que compila y luego muere al abrirse, con
+      # "Requested 'pillow==12.2.0', but pillow==10.2.0 is already installed".
       - name: Soltar los pines que son de Android
         run: |
           sed -i -E 's/"(pillow|fpdf2|cryptography)==[0-9.]+"/"\1"/' pyproject.toml
+          sed -i -E 's/^(pillow|fpdf2|cryptography)==[0-9.]+$/\1/' requirements.txt
           echo "--- dependencias con las que se compila la web ---"
           sed -n '/^dependencies/,/^]/p' pyproject.toml
+          echo "--- y las que leera el navegador al arrancar ---"
+          cat requirements.txt
 
       # `--base-url` es obligatorio: en GitHub Pages el sitio NO vive en la raiz
       # del dominio sino en /<repositorio>/. Sin esto la pagina carga en blanco,
