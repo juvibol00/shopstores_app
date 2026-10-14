@@ -43,6 +43,7 @@ async def _armar(page: ft.Page):
     from backend import nube
     from frontend import memoria_web
     from frontend import paleta
+    from frontend import selector
     from frontend.vistas.cobros_view import crear_vista_cobros
     from frontend.vistas.configuracion_view import crear_vista_configuracion
     from frontend.vistas.gestion_view import crear_vista_gestion
@@ -141,6 +142,10 @@ async def _armar(page: ft.Page):
             mostrar(crear_vista_pin(page, entrar))
         else:
             mostrar(crear_vista_sesion(page, puerta))
+
+    # El selector de fotos, listo antes de que nadie lo toque: en el iPhone, si
+    # se crea al tocar, la galeria no se abre (ver `frontend/selector.py`).
+    selector.preparar(page)
 
     page.add(ft.SafeArea(
         ft.Column([cuerpo, caja_barra], spacing=0, expand=True),

@@ -19,6 +19,7 @@ from backend import fotos
 from backend import formato
 from frontend import paleta
 from frontend import pantalla
+from frontend import selector
 from frontend.vistas.catalogo_view import crear_vista_catalogo
 
 POR_TANDA = 40
@@ -371,18 +372,15 @@ def _miniatura(page, fila, recargar):
 
 def _boton_agregar_foto(page, producto_id, recargar):
     async def elegir(e):
-        selector = ft.FilePicker()
-        page.services.append(selector)
-        page.update()
+        # Nada antes de pedir la galeria: en el iPhone, cualquier paso previo
+        # hace que la orden llegue tarde y Safari la descarte (ver `selector`).
         try:
-            archivos = await selector.pick_files(
+            archivos = await selector.de(page).pick_files(
                 dialog_title="Elige una foto del producto",
                 file_type=ft.FilePickerFileType.IMAGE, with_data=True)
         except Exception as ex:
             dialogos.error(page, f"No se pudo abrir la galería: {ex}")
             return
-        finally:
-            page.services.remove(selector)
 
         if not archivos:
             return

@@ -20,6 +20,7 @@ from frontend import dialogos
 from frontend import estilo
 from frontend import paleta
 from frontend import pantalla
+from frontend import selector
 
 
 def crear_vista_configuracion(page, funcion_volver, al_cerrar_sesion=None):
@@ -419,17 +420,12 @@ def _cuerpo_respaldo(page, al_volver, recargar):
             "Enviar", mandar)
 
     async def elegir_archivo(e):
-        selector = ft.FilePicker()
-        page.services.append(selector)
-        page.update()
         try:
-            archivos = await selector.pick_files(
+            archivos = await selector.de(page).pick_files(
                 dialog_title="Elige el archivo del respaldo", with_data=True)
         except Exception as ex:
             dialogos.error(page, f"No se pudo abrir el explorador: {ex}")
             return
-        finally:
-            page.services.remove(selector)
         if not archivos:
             return
         _confirmar_restauracion(page, archivos[0].bytes, recargar)
