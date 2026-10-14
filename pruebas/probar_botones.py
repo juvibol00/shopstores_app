@@ -541,6 +541,47 @@ for vuelta, (etiqueta, esperado) in enumerate(
           f"el toque {vuelta} deja el período en «{esperado}» "
           f"(quedó «{estado_de(vista_gestion)}»)")
 
+print()
+print("Arranque: un import que falla se ve en pantalla, no en blanco")
+# Fallo real: en la version web la app quedo en blanco cinco veces seguidas, con
+# un error distinto cada vez y ninguno visible sin abrir la consola del navegador.
+# Los imports estaban arriba de main.py y mataban a Python antes de que existiera
+# la red de errores. Aca se rompe un import a proposito y se mira la pantalla.
+import importlib
+import main as arranque
+
+
+class PaginaVacia:
+    """Una pagina recien abierta: acepta lo que `main` le quiera poner."""
+    def __init__(self):
+        self.controls = []
+
+    def add(self, *controles):
+        self.controls.extend(controles)
+
+    def update(self):
+        pass
+
+
+roto = "frontend.vistas.pin_view"
+guardado = sys.modules.get(roto)
+sys.modules[roto] = None          # asi `import` falla de verdad
+try:
+    pantalla_rota = PaginaVacia()
+    arranque.main(pantalla_rota)
+    textos = [str(getattr(c, "value", "")) for c in pantalla_rota.controls]
+    check(any("No se pudo arrancar" in t for t in textos),
+          "en vez de quedar en blanco, dice que no pudo arrancar")
+    check(any("pin_view" in t for t in textos),
+          "y muestra el error real, con el modulo que fallo")
+    check(pantalla_rota.bgcolor == "#FFFFFF",
+          "la pantalla de error no depende de la paleta, que podria ser lo roto")
+finally:
+    if guardado is not None:
+        sys.modules[roto] = guardado
+    else:
+        del sys.modules[roto]
+
 bd.cerrar()
 shutil.rmtree(TEMPORAL, ignore_errors=True)
 print(f"\n{'TODO BIEN' if not fallos else 'FALLARON: ' + ', '.join(fallos)}")

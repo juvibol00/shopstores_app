@@ -3,7 +3,7 @@
 El codigo esta partido en dos, igual que SELL-B:
 
     backend/    la base de datos, el cifrado, los generadores de PDF, el correo y
-                el respaldo en Neon. **Nada de aca importa flet.**
+                el respaldo en archivo. **Nada de aca importa flet.**
     frontend/   las pantallas (`vistas/`), el estilo, la paleta y los dialogos.
     main.py     esto: el unico archivo de la raiz, porque es el que abre `flet`.
 
@@ -18,15 +18,15 @@ import traceback
 
 import flet as ft
 
-from backend import basedatos
-from frontend import paleta
-from frontend.vistas.cobros_view import crear_vista_cobros
-from frontend.vistas.configuracion_view import crear_vista_configuracion
-from frontend.vistas.inicio_view import crear_vista_inicio
-from frontend.vistas.inventario_view import crear_vista_inventario
-from frontend.vistas.gestion_view import crear_vista_gestion
-from frontend.vistas.pin_view import crear_vista_pin
-from frontend.vistas.ventas_view import crear_vista_ventas
+# **Arriba del archivo solo va lo que no puede fallar.** Todo lo de la aplicacion
+# se importa dentro de `_armar`, que esta protegida por `main`.
+#
+# Antes estaba todo aca arriba, y eso dejaba ciega a la red de errores de `main`:
+# un import que fallaba mataba a Python **antes** de que existiera la pantalla, y
+# la app quedaba en blanco sin decir nada. Asi paso en la version web, cinco veces
+# seguidas, con un error distinto cada vez y ninguno visible sin abrir la consola
+# del navegador. Con los imports adentro, cualquier fallo de arranque se ve
+# escrito en la pantalla del telefono.
 
 SECCIONES = {
     "inicio":     (ft.Icons.HOME, "Inicio"),
@@ -38,6 +38,17 @@ SECCIONES = {
 ORDEN = ["inicio", "venta", "inventario", "cobros", "metricas"]
 
 def _armar(page: ft.Page):
+    # Ver la nota de arriba: estos imports viven aca para que un fallo se vea.
+    from backend import basedatos
+    from frontend import paleta
+    from frontend.vistas.cobros_view import crear_vista_cobros
+    from frontend.vistas.configuracion_view import crear_vista_configuracion
+    from frontend.vistas.gestion_view import crear_vista_gestion
+    from frontend.vistas.inicio_view import crear_vista_inicio
+    from frontend.vistas.inventario_view import crear_vista_inventario
+    from frontend.vistas.pin_view import crear_vista_pin
+    from frontend.vistas.ventas_view import crear_vista_ventas
+
     page.title = "ShopStore's"
     page.bgcolor = paleta.FONDO
     page.padding = 0
@@ -113,16 +124,27 @@ def _armar(page: ft.Page):
 
 def main(page: ft.Page):
     """Un error de arranque tiene que verse en la pantalla del telefono. Sin esto,
-    un fallo al importar deja la app en blanco y sin explicacion."""
+    un fallo al importar deja la app en blanco y sin explicacion.
+
+    La pantalla de error **no usa nada de la aplicacion**, ni siquiera la paleta:
+    si lo que fallo es justo un import, la paleta tampoco estaria, y el aviso del
+    error reventaria a su vez. Solo `flet` y colores escritos a mano.
+    """
     try:
         _armar(page)
     except Exception:
         page.controls.clear()
-        page.bgcolor = paleta.FONDO
+        page.bgcolor = "#FFFFFF"
+        page.padding = 16
+        page.scroll = ft.ScrollMode.AUTO
         page.add(
-            ft.Text("Error al arrancar", size=20, color=paleta.ERROR),
+            ft.Text("No se pudo arrancar", size=20, weight=ft.FontWeight.W_600,
+                    color="#B4534B"),
+            ft.Text("Mándale una captura de esto a quien te instaló la app.",
+                    size=13, color="#6E6679"),
+            ft.Container(height=8),
             ft.Text(traceback.format_exc(), size=11, selectable=True,
-                    font_family="monospace"),
+                    font_family="monospace", color="#27222E"),
         )
         page.update()
 
