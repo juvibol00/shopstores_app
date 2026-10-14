@@ -79,10 +79,19 @@ jobs:
       # el navegador** es `requirements.txt`. Soltar solo el primero deja una web
       # que compila y luego muere al abrirse, con
       # "Requested 'pillow==12.2.0', but pillow==10.2.0 is already installed".
+      # **`sqlite3` va aparte en el navegador.** En Python normal viene incluido,
+      # pero Pyodide lo saca de la biblioteca estandar para que la descarga pese
+      # menos, y hay que pedirlo como paquete. Sin esto la app muere en la primera
+      # linea que toca la base: "No module named 'sqlite3'".
+      #
+      # Va **solo en requirements.txt**, que es lo que se instala al arrancar en
+      # el navegador. En `pyproject.toml` no: ese lo usa la compilacion, que corre
+      # con Python normal, y alli `sqlite3` no existe como paquete instalable.
       - name: Soltar los pines que son de Android
         run: |
           sed -i -E 's/"(pillow|fpdf2|cryptography)==[0-9.]+"/"\1"/' pyproject.toml
           sed -i -E 's/^(pillow|fpdf2|cryptography)==[0-9.]+$/\1/' requirements.txt
+          echo "sqlite3" >> requirements.txt
           echo "--- dependencias con las que se compila la web ---"
           sed -n '/^dependencies/,/^]/p' pyproject.toml
           echo "--- y las que leera el navegador al arrancar ---"
