@@ -108,6 +108,33 @@ jobs:
       - name: Construir la version web
         run: yes | flet build web --verbose --base-url shopstores_app
 
+      # **El icono del iPhone no lo hace Flet.** La compilacion genera los iconos
+      # del navegador y de Android con `assets/icon.png`, pero el que usa el
+      # iPhone al «Agregar a pantalla de inicio» (`apple-touch-icon`) viene de la
+      # plantilla de Flet con su propio logo, y nadie lo reemplaza.
+      #
+      # Ademas, el logo tiene las esquinas transparentes, y el iPhone pinta de
+      # negro lo transparente: el icono tiene que ser un cuadrado lleno, porque
+      # las esquinas redondas las pone el iPhone. Por eso se rellena con el morado
+      # de la marca antes de achicarlo a 180x180, el tamano que pide Apple.
+      #
+      # De paso, la barra del navegador en Android toma el color de la marca en
+      # vez del azul de Flet.
+      - name: Icono del iPhone y colores de la marca
+        run: |
+          pip install pillow
+          python - <<'EOF'
+          from PIL import Image
+          logo = Image.open("assets/icon.png").convert("RGBA")
+          lleno = Image.new("RGBA", logo.size, (107, 78, 155, 255))
+          lleno.alpha_composite(logo)
+          lleno.convert("RGB").resize((180, 180), Image.LANCZOS).save(
+              "build/web/icons/apple-touch-icon-192.png")
+          EOF
+          sed -i 's/"theme_color": "#0175C2"/"theme_color": "#6B4E9B"/' build/web/manifest.json
+          sed -i 's/"background_color": "#FFFFFF"/"background_color": "#FAF8FD"/' build/web/manifest.json
+          grep -n "color" build/web/manifest.json
+
       - name: Ver que salio
         run: |
           echo "--- contenido de build/web ---"
