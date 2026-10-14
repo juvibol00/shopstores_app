@@ -64,8 +64,7 @@ def _lista(page, al_abrir):
         sin_stock = float(fila["stock"]) <= 0
 
         if fila["miniatura"]:
-            imagen = ft.Image(src=fila["miniatura"], width=56, height=56,
-                              fit=ft.BoxFit.COVER, border_radius=8)
+            imagen = estilo.foto(fila["miniatura"], 56)
         else:
             imagen = ft.Container(width=56, height=56, bgcolor=paleta.LILA,
                                   border_radius=8,
@@ -345,8 +344,7 @@ def _miniatura(page, fila, recargar):
             peligro=fila["orden"] == 1)
 
     marco = ft.Container(
-        content=ft.Image(src=fila["miniatura"], width=76, height=76,
-                         fit=ft.BoxFit.COVER, border_radius=8),
+        content=estilo.foto(fila["miniatura"], 76),
         on_click=opciones,
     )
     if fila["orden"] == 1:

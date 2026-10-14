@@ -674,6 +674,24 @@ else:
           "Flet 0.85 (el APK): abre la galeria con pick_files, como antes")
 
 print()
+print("Inventario: la foto viaja como texto a la pantalla")
+# Fallo real: en el iPhone la foto se guardaba pero el cuadro quedaba vacio. En
+# la web, Python corre dentro del navegador y la foto en bytes no se dibujaba;
+# en base64 si (comprobado en Flet 1.0 web).
+import base64
+from frontend import estilo
+cuadro = estilo.foto(imagen(), 76)
+check(isinstance(cuadro.src, str), "la foto va como texto, no como bytes")
+check(base64.b64decode(cuadro.src) == imagen(), "y es la misma imagen, entera")
+con_miniatura = bd.crear_producto("Con miniatura", "", 5.0, 19.0, stock_inicial=1)
+bd.guardar_foto(con_miniatura, fotos.preparar(imagen()))
+miniaturas = [c for c in todos(inventario_view._ficha(page, con_miniatura,
+                                                      lambda: None))
+              if isinstance(c, ft.Image)]
+check(miniaturas and all(isinstance(c.src, str) for c in miniaturas),
+      "las miniaturas de la ficha van como texto")
+
+print()
 print("Velocidad: cada pantalla va a Supabase una sola vez")
 # Fallo real: Inicio hacia doce viajes al abrirse, a medio segundo cada uno, y
 # cambiar de pestana tardaba segundos. Ahora cada pantalla pide todo junto antes

@@ -16,6 +16,8 @@ Poner esto en un solo lugar además evita que dos pantallas usen 19 y 20 px para
 mismo, que es lo que ya estaba empezando a pasar.
 """
 
+import base64
+
 import flet as ft
 
 from frontend import paleta
@@ -171,3 +173,20 @@ def pastillas(opciones, elegida, al_elegir, sobre_beige=False):
             on_click=lambda e, c=clave: al_elegir(c))
 
     return ft.Row([una(c, e) for c, e in opciones], spacing=6)
+
+
+def foto(datos, lado, radio=8):
+    """Una foto de producto, cuadrada y recortada al centro.
+
+    **Viaja a la pantalla como texto (base64), no como bytes.** En la version web,
+    en el iPhone, la foto se guardaba bien pero el cuadro quedaba vacio: Python
+    corre dentro del navegador y los bytes no llegaban a dibujarse. Flet acepta
+    las dos formas, y en texto se dibuja en todos lados (comprobado en Flet 1.0
+    web, donde bytes, base64 y data URI se ven iguales).
+
+    Ojo: una imagen que no se puede decodificar **no avisa**, se ve como un cuadro
+    vacio. `error_content` no sirve para esto: se probo y no aparece con fotos
+    que vienen como datos, solo con las que vienen de una direccion.
+    """
+    return ft.Image(src=base64.b64encode(datos).decode("ascii"), width=lado,
+                    height=lado, fit=ft.BoxFit.COVER, border_radius=radio)
