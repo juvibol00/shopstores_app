@@ -105,6 +105,7 @@ def _cerrar_sesion(page, al_cerrar_sesion):
     quedan en la cuenta, y vuelven al entrar de nuevo con el correo."""
     def cerrar():
         nube.cerrar_sesion()
+        basedatos.olvidar_lo_leido()
         if al_cerrar_sesion:
             al_cerrar_sesion()
 

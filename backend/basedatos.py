@@ -24,6 +24,7 @@ puesta y las comparaciones tienen que cerrar.
 """
 
 import base64
+import copy
 import json
 import time
 import uuid
@@ -57,9 +58,28 @@ LECTURAS = frozenset({
     "ventas_para_serie", "resumen_inventario", "productos_del_catalogo", "lote",
 })
 
-# **Lo que ya vino en un lote y espera a que lo pidan.** Ver `_de_un_viaje`.
+# **Lo ya leido, para no volver a viajar.** Ver "Leer una vez" mas abajo.
 _listo = {}
-VIGENCIA = 5        # segundos: lo justo para armar una pantalla
+VIGENCIA = 120      # segundos
+
+
+def olvidar_lo_leido():
+    """Descarta todo lo guardado. Al cerrar sesion o al entrar con otra cuenta,
+    o cuando algo cambia los datos por fuera de la app (las pruebas)."""
+    _listo.clear()
+
+
+def _guardado(funcion, datos):
+    item = _listo.get(_clave(funcion, datos))
+    if item is None or time.monotonic() - item[0] >= VIGENCIA:
+        return False, None
+    # Copia: varias funciones de abajo retocan lo que devuelven (las fotos pasan
+    # de texto a bytes), y lo guardado tiene que quedar como vino.
+    return True, copy.deepcopy(item[1])
+
+
+def _guardar(funcion, datos, resultado):
+    _listo[_clave(funcion, datos)] = (time.monotonic(), copy.deepcopy(resultado))
 
 
 def _clave(funcion, datos):
@@ -73,20 +93,25 @@ def _rpc(funcion, /, **datos):
     un texto escrito para la pantalla y sale tal cual. Cualquier otro es un fallo
     que nadie previo: se muestra con su detalle para poder diagnosticarlo.
 
-    Si la respuesta ya vino en un lote, se usa esa y no se viaja.
+    Una lectura que ya se hizo hace poco no viaja: se devuelve la guardada.
     """
-    guardado = _listo.pop(_clave(funcion, datos), None)
-    if guardado is not None and time.monotonic() - guardado[0] < VIGENCIA:
-        return guardado[1]
-    if funcion not in LECTURAS:
-        # Algo se escribio: lo que vino antes puede haber quedado viejo.
+    lectura = funcion in LECTURAS
+    if lectura:
+        hay, valor = _guardado(funcion, datos)
+        if hay:
+            return valor
+    else:
+        # Algo se escribe: lo leido antes puede haber quedado viejo.
         _listo.clear()
     try:
-        return nube.llamar(funcion, datos, lectura=funcion in LECTURAS)
+        resultado = nube.llamar(funcion, datos, lectura=lectura)
     except nube.ErrorRemoto as ex:
         if ex.codigo == "P0001":
             raise _ERRORES.get(ex.pista, ValueError)(ex.mensaje) from None
         raise ValueError(f"No se pudo completar. ({ex.mensaje})") from None
+    if lectura:
+        _guardar(funcion, datos, resultado)
+    return resultado
 
 
 def _a_bytes(texto):
@@ -109,39 +134,53 @@ def nuevo_id():
 def preparar_cuenta():
     """Deja la cuenta lista para vender: siembra los metodos de pago la primera
     vez. Se llama al entrar; despues de la primera vez no hace nada."""
-    _listo.clear()          # lo de otra cuenta, si la hubo, no sirve
+    olvidar_lo_leido()      # lo de otra cuenta, si la hubo, no sirve
     _rpc("preparar_cuenta")
 
 
 # --------------------------------------------------------------------------
-# Una pantalla, un viaje
+# Leer una vez, y todo junto
 # --------------------------------------------------------------------------
 #
-# Cada viaje a Supabase tarda de 0,25 a 0,5 segundos. Inicio pedia doce cosas al
-# abrirse, una por una: seis segundos mirando la pantalla quieta.
+# Cada viaje a Supabase desde Venezuela tarda de 0,4 a 0,6 segundos (medido: la
+# mitad es la distancia hasta el servidor). Inicio pedia doce cosas al abrirse,
+# una por una: seis segundos mirando la pantalla quieta. Y aun con un viaje por
+# pantalla, cambiar de pestana se sentia.
 #
-# La salida no fue reescribir las pantallas sino **adelantarse**: antes de
-# armarlas se piden todas sus lecturas en un solo viaje (`lote`), y cuando la
-# pantalla las pide de a una, las respuestas ya estan aca. Cada respuesta se usa
-# **una sola vez** y vence a los pocos segundos, y cualquier escritura descarta
-# todo lo adelantado: nunca se muestra un dato viejo despues de un cambio.
+# Dos cosas lo resuelven:
+#
+# 1. **Lo leido se guarda** (`_listo`) y se reusa durante `VIGENCIA`. Volver a
+#    una pestana ya vista no viaja.
+# 2. **Se pide todo junto**: `precargar_*` manda en un solo viaje (`lote`) las
+#    lecturas de una pantalla que falten, y `precargar_todo`, al entrar, las de
+#    todas.
+#
+# **Nunca se muestra un dato viejo despues de un cambio:** cualquier escritura
+# (una venta, un gasto, la tasa) descarta todo lo guardado, y lo siguiente que
+# se muestre se vuelve a pedir. Lo unico que puede tardar hasta `VIGENCIA` en
+# verse es lo que se cargue **desde otro aparato** al mismo tiempo.
 #
 # Los argumentos de cada llamada tienen que ser **exactamente** los que usa la
 # funcion de abajo; si no coinciden, no pasa nada malo, solo se viaja igual.
-# `probar_fase4.py` cuenta los viajes de cada pantalla para que no pase sin
+# `probar_botones.py` cuenta los viajes de cada pantalla para que no pase sin
 # que se note.
 
 def _de_un_viaje(*llamadas):
-    _listo.clear()
+    """Pide en un solo viaje lo que todavia no este guardado."""
+    faltan = []
+    for funcion, datos in llamadas:
+        if not _guardado(funcion, datos)[0] and (funcion, datos) not in faltan:
+            faltan.append((funcion, datos))
+    if not faltan:
+        return
     try:
         resultados = nube.llamar(
-            "lote", {"llamadas": [{"f": f, "p": d} for f, d in llamadas]},
+            "lote", {"llamadas": [{"f": f, "p": d} for f, d in faltan]},
             lectura=True)
     except (nube.ErrorRemoto, nube.ErrorDeNube):
         return      # si falla, cada pantalla pide lo suyo como antes
-    momento = time.monotonic()
-    for (funcion, datos), resultado in zip(llamadas, resultados):
-        _listo[_clave(funcion, datos)] = (momento, resultado)
+    for (funcion, datos), resultado in zip(faltan, resultados):
+        _guardar(funcion, datos, resultado)
 
 
 def _hoy_local():
@@ -156,9 +195,9 @@ def precargar_puerta():
     )
 
 
-def precargar_inicio():
+def _lecturas_de_inicio():
     sp_desde, sp_hasta, _ = rango("semana_pasada")
-    _de_un_viaje(
+    return [
         ("leer_config", {"clave": "nombre_usuario"}),
         ("leer_config", {"clave": "tasa_bcv"}),
         ("leer_config", {"clave": "tasa_actualizada_en"}),
@@ -167,23 +206,35 @@ def precargar_inicio():
         ("resumen_ventas", {"desde": _inicio_del_dia_utc(), "hasta": None}),
         ("resumen_ventas", {"desde": sp_desde, "hasta": sp_hasta}),
         ("clientes_con_saldo", {}),
-    )
+    ]
 
 
-def precargar_venta():
-    _de_un_viaje(
+def _lecturas_de_venta():
+    return [
         ("leer_config", {"clave": "tasa_bcv"}),
         ("listar_metodos", {"incluir_inactivos": False}),
         ("resumen_ventas", {"desde": _inicio_del_dia_utc(), "hasta": None}),
-    )
+    ]
 
 
-def precargar_inventario(busqueda, tope):
-    _de_un_viaje(
+def _lecturas_de_inventario(busqueda, tope):
+    return [
         ("listar_productos", {"busqueda": busqueda.strip(), "limite": tope}),
         ("contar_productos", {"busqueda": busqueda.strip()}),
         ("resumen_inventario", {}),
-    )
+    ]
+
+
+def precargar_inicio():
+    _de_un_viaje(*_lecturas_de_inicio())
+
+
+def precargar_venta():
+    _de_un_viaje(*_lecturas_de_venta())
+
+
+def precargar_inventario(busqueda, tope):
+    _de_un_viaje(*_lecturas_de_inventario(busqueda, tope))
 
 
 def _lecturas_del_periodo(desde, hasta):
@@ -198,6 +249,15 @@ def _lecturas_del_periodo(desde, hasta):
 def precargar_gestion(periodo):
     desde, hasta, _ = rango(periodo)
     _de_un_viaje(*_lecturas_del_periodo(desde, hasta))
+
+
+def precargar_todo(tope_inventario):
+    """Al entrar: lo de todas las pestanas en un solo viaje. Despues, cambiar de
+    pestana no viaja hasta que algo se escriba."""
+    desde, hasta, _ = rango("semana")
+    _de_un_viaje(*_lecturas_de_inicio(), *_lecturas_de_venta(),
+                 *_lecturas_de_inventario("", tope_inventario),
+                 *_lecturas_del_periodo(desde, hasta))
 
 
 def precargar_semana(desde, hasta):

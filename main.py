@@ -47,7 +47,7 @@ async def _armar(page: ft.Page):
     from frontend.vistas.configuracion_view import crear_vista_configuracion
     from frontend.vistas.gestion_view import crear_vista_gestion
     from frontend.vistas.inicio_view import crear_vista_inicio
-    from frontend.vistas.inventario_view import crear_vista_inventario
+    from frontend.vistas.inventario_view import POR_TANDA, crear_vista_inventario
     from frontend.vistas.pin_view import crear_vista_pin
     from frontend.vistas.sesion_view import (crear_vista_sesion,
                                              crear_vista_sin_conexion)
@@ -98,6 +98,9 @@ async def _armar(page: ft.Page):
 
     def entrar():
         basedatos.preparar_cuenta()       # la primera vez siembra los metodos
+        # Lo de todas las pestanas en un solo viaje: despues, cambiar de pestana
+        # no espera a internet hasta que algo se registre.
+        basedatos.precargar_todo(POR_TANDA)
         barra["control"] = ft.NavigationBar(
             selected_index=0,
             bgcolor=paleta.TARJETA,

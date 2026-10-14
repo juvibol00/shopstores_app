@@ -176,6 +176,10 @@ class Sesion:
         nube.transporte = self.transporte
 
     def sql(self, consulta, **parametros):
+        # Cambia los datos por fuera de la app: lo que la app tenia leido ya no
+        # vale.
+        from backend import basedatos
+        basedatos.olvidar_lo_leido()
         return self.admin.run(consulta, **parametros)
 
     def otro_usuario(self):

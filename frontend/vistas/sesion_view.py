@@ -10,6 +10,7 @@ La contrasena no se guarda en ningun lado, ni en el telefono ni en la app.
 
 import flet as ft
 
+from backend import basedatos
 from backend import nube
 from frontend import estilo
 from frontend import marca
@@ -34,6 +35,7 @@ def crear_vista_sesion(page, al_entrar):
             aviso.update()
             return
         clave.value = ""
+        basedatos.olvidar_lo_leido()     # puede ser otra cuenta que la de antes
         al_entrar()
 
     entrar = sin_fallos_mudos(aviso, entrar)

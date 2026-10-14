@@ -671,11 +671,32 @@ pantallas = {
     "Gestion": lambda: gestion_view.crear_vista_gestion(page),
 }
 try:
+    prod_venta = bd.crear_producto("Para la velocidad", "", 5.0, 45.0,
+                                   stock_inicial=5)
     for nombre_pantalla, armar in pantallas.items():
+        bd.olvidar_lo_leido()             # la primera vez, sin nada guardado
         viajes.clear()
         armar()
         check(len(viajes) == 1,
               f"{nombre_pantalla}: un viaje (hizo {len(viajes)}: {viajes})")
+
+    # Al entrar se trae lo de todas las pestanas: cambiar de pestana no viaja.
+    bd.olvidar_lo_leido()
+    viajes.clear()
+    bd.precargar_todo(inventario_view.POR_TANDA)
+    check(viajes == ["lote"], "al entrar, todas las pestanas en un solo viaje")
+    for nombre_pantalla, armar in pantallas.items():
+        viajes.clear()
+        armar()
+        check(viajes == [], f"{nombre_pantalla}: despues, sin viajar")
+
+    # Registrar algo descarta lo guardado: lo que sigue se vuelve a pedir.
+    antes_v = bd.resumen_de_hoy()["ventas"]
+    bd.registrar_venta([{"producto_id": prod_venta, "cantidad": 1}], 620.0,
+                       pagos=[{"metodo_id": bd.listar_metodos()[0]["id"],
+                               "monto": 45.0}])
+    check(bd.resumen_de_hoy()["ventas"] == antes_v + 1,
+          "despues de una venta, Inicio muestra la venta nueva")
 finally:
     nube.transporte = transporte_real
 
