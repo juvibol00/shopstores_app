@@ -41,6 +41,23 @@ def redimensionar(datos, lado_max, calidad, presupuesto_kb=None):
     formato = imagen.format
     orientacion = imagen.getexif().get(ORIENTACION_EXIF, 1)
 
+    # Se decide con la cabecera, antes de leer un solo pixel.
+    if (formato == "JPEG"
+            and orientacion in (0, 1)                    # no hay que enderezarla
+            and max(imagen.size) <= lado_max             # ya cabe
+            and presupuesto_kb is not None
+            and len(datos) <= presupuesto_kb * 1024):    # ya pesa poco
+        return datos
+
+    # **Un JPEG se puede leer ya achicado.** `draft` le pide al decodificador la
+    # escala mas chica que siga siendo mayor que `lado_max` (1/2, 1/4 o 1/8), en
+    # vez de armar los 12 megapixeles de una foto de telefono para despues
+    # tirarlos. En el navegador del iPhone eso era lo que hacia que guardar una
+    # foto tardara o se colgara: medido en el mismo Pyodide, una foto de 9 MB
+    # paso de 2,5 s a 1,3 s, con mucha menos memoria. Como despues igual se
+    # achica con LANCZOS, la calidad final no cambia. En PNG no hace nada.
+    imagen.draft("RGB", (lado_max, lado_max))
+
     # El telefono no rota el pixel: escribe la rotacion en el EXIF. Sin esto, la
     # mitad de los productos saldria acostada en el catalogo.
     imagen = ImageOps.exif_transpose(imagen)
@@ -48,13 +65,6 @@ def redimensionar(datos, lado_max, calidad, presupuesto_kb=None):
     # JPEG no admite canal alfa; un PNG de la galeria reventaria al guardar.
     if imagen.mode != "RGB":
         imagen = imagen.convert("RGB")
-
-    if (formato == "JPEG"
-            and orientacion in (0, 1)                    # no hubo que enderezarla
-            and max(imagen.size) <= lado_max             # ya cabe
-            and presupuesto_kb is not None
-            and len(datos) <= presupuesto_kb * 1024):    # ya pesa poco
-        return datos
 
     imagen.thumbnail((lado_max, lado_max), Image.LANCZOS)
 
