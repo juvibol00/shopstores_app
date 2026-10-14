@@ -360,19 +360,7 @@ def _miniatura(page, fila, recargar):
 
 
 def _boton_agregar_foto(page, producto_id, recargar):
-    async def elegir(e):
-        # Nada antes de pedir la galeria: en el iPhone, cualquier paso previo
-        # hace que la orden llegue tarde y Safari la descarte (ver `selector`).
-        try:
-            archivos = await selector.de(page).pick_files(
-                dialog_title="Elige una foto del producto",
-                file_type=ft.FilePickerFileType.IMAGE, with_data=True)
-        except Exception as ex:
-            dialogos.error(page, f"No se pudo abrir la galería: {ex}")
-            return
-
-        if not archivos:
-            return
+    def guardar(archivos):
         try:
             basedatos.guardar_foto(producto_id, fotos.preparar(archivos[0].bytes))
         except ValueError as ex:
@@ -383,10 +371,16 @@ def _boton_agregar_foto(page, producto_id, recargar):
             return
         recargar()
 
+    # Como abrir la galeria depende de la version de Flet: en el iPhone tiene
+    # que hacerlo la pantalla misma, dentro del toque (ver `selector`).
     return ft.Container(
         content=ft.Icon(ft.Icons.ADD_A_PHOTO, color=paleta.MARCA, size=24),
         width=76, height=76, bgcolor=paleta.LILA_CLARO, border_radius=8,
-        alignment=ft.Alignment.CENTER, on_click=elegir,
+        alignment=ft.Alignment.CENTER,
+        **selector.elegir_imagen(
+            page, guardar, "Elige una foto del producto",
+            al_fallar=lambda ex: dialogos.error(
+                page, f"No se pudo abrir la galería: {ex}")),
     )
 
 

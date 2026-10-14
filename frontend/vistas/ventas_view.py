@@ -90,7 +90,7 @@ def _pantalla_venta(page, funcion_navegar, al_ver_historial):
     boton_completar = ft.TextButton(
         content="Completar", visible=False, icon=ft.Icons.AUTO_FIX_HIGH,
         style=ft.ButtonStyle(color=paleta.MARCA))
-    boton_cobrar = ft.ElevatedButton(
+    boton_cobrar = ft.Button(
         content="Cobrar", width=400, height=48, disabled=True,
         style=ft.ButtonStyle(bgcolor=paleta.MARCA, color=paleta.FONDO))
 

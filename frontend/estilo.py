@@ -146,8 +146,8 @@ def boton(texto, al_click, principal=True, ancho=None, peligro=False,
         estilo = ft.ButtonStyle(color=paleta.MARCA)
     # `expand` sirve para repartir el ancho entre dos botones de una fila; `ancho`
     # para el botón que ocupa la pantalla entera.
-    return ft.ElevatedButton(content=texto, on_click=al_click, width=ancho,
-                             height=alto, expand=expand, style=estilo)
+    return ft.Button(content=texto, on_click=al_click, width=ancho,
+                     height=alto, expand=expand, style=estilo)
 
 
 def pastillas(opciones, elegida, al_elegir, sobre_beige=False):

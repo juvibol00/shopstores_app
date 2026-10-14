@@ -49,7 +49,7 @@ def _boton(texto, al_click, destacado=False, peligro=False):
         estilo = ft.ButtonStyle(bgcolor=paleta.MARCA, color=paleta.FONDO)
     else:
         estilo = ft.ButtonStyle(color=paleta.MARCA)
-    return ft.ElevatedButton(content=texto, on_click=al_click, style=estilo)
+    return ft.Button(content=texto, on_click=al_click, style=estilo)
 
 
 def _quitar(page, objetivo):

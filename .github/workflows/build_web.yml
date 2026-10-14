@@ -43,8 +43,20 @@ jobs:
         with:
           python-version: '3.11'
 
+      # **La web va con Flet 1.0; el APK sigue con 0.85.3.** En el iPhone la
+      # galeria no se abria: Safari solo la abre si la orden sale dentro del
+      # toque, y en 0.85 esa orden pasa antes por Python y llega tarde. Flet 1.0
+      # trae `PickFiles`, que la pantalla ejecuta sola dentro del toque (ver
+      # `frontend/selector.py`). El codigo funciona con las dos versiones: las
+      # suites pasan en ambas.
+      #
+      # El APK no se cambia hasta probarlo aparte en un telefono: ya costo un APK
+      # muerto compilar con una Flet distinta de la probada.
+      #
+      # `flet-cli` y `flet-web` van con la misma version a proposito: son los que
+      # compilan, y tienen que ser de la misma Flet que se empaqueta.
       - name: Instalar el motor de Flet
-        run: pip install flet==0.85.3
+        run: pip install flet==1.0.4 flet-cli==1.0.4 flet-web==1.0.4
 
       # Lo mismo que en el APK: `flet build` empaqueta la carpeta tal cual.
       - name: Quitar del paquete lo que no va publicado
@@ -92,6 +104,8 @@ jobs:
       # compila y luego muere al abrirse.
       - name: Ajustar las dependencias al navegador
         run: |
+          sed -i 's/"flet==0.85.3"/"flet==1.0.4"/' pyproject.toml
+          sed -i 's/^flet==0.85.3$/flet==1.0.4/' requirements.txt
           sed -i '/"cryptography/d' pyproject.toml
           sed -i '/^cryptography/d' requirements.txt
           sed -i -E 's/"(pillow|fpdf2)==[0-9.]+"/"\1"/' pyproject.toml
@@ -105,8 +119,13 @@ jobs:
       # `--base-url` es obligatorio: en GitHub Pages el sitio NO vive en la raiz
       # del dominio sino en /<repositorio>/. Sin esto la pagina carga en blanco,
       # porque busca sus propios archivos en una ruta que no existe.
+      # `--python-version 3.12`: Flet 1.0 compila por defecto con Python 3.14,
+      # que en el navegador es otro Pyodide (314.x) con otro indice de paquetes.
+      # Con 3.12 usa Pyodide 0.27.8, practicamente el mismo 0.27.7 de Flet 0.85
+      # en el que se probaron los arreglos de `ssl`, `hashlib` y `sqlite3`, y con
+      # los mismos paquetes (pillow 10.2.0).
       - name: Construir la version web
-        run: yes | flet build web --verbose --base-url shopstores_app
+        run: yes | flet build web --verbose --base-url shopstores_app --python-version 3.12
 
       # **El icono del iPhone no lo hace Flet.** La compilacion genera los iconos
       # del navegador y de Android con `assets/icon.png`, pero el que usa el

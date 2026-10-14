@@ -343,7 +343,7 @@ check(estado is not None and estado.value == "El pago cuadra",
 check(not completar.visible, "y el botón se retira porque ya no falta nada")
 
 cobrar = next((c for c in todos(vista_venta)
-               if isinstance(c, ft.ElevatedButton) and c.content == "Cobrar"), None)
+               if isinstance(c, ft.Button) and c.content == "Cobrar"), None)
 check(cobrar is not None and not cobrar.disabled,
       "y Cobrar queda habilitado")
 
@@ -413,7 +413,8 @@ check(not [c for c in todos(tira) if isinstance(c, ft.Image)],
 boton_foto = next(c for c in todos(tira)
                   if isinstance(c, ft.Container) and c.width == 76
                   and c.bgcolor is not None)
-repintar = cierre(boton_foto.on_click, "recargar")
+# El clic le pasa la foto elegida a `guardar`, y es `guardar` quien repinta.
+repintar = cierre(cierre(boton_foto.on_click, "al_elegir"), "recargar")
 # El fallo: repintaba reemplazando el contenido de un contenedor, y la miniatura
 # no se veía hasta salir del producto y volver a entrar.
 check(repintar is not None and repintar.__name__ == "refrescar_fotos",
@@ -459,7 +460,7 @@ dialogos._POR_LIMPIAR.clear()
 
 tarjeta_tasa = inicio_view._tarjeta_tasa(page, lambda: None)
 boton_actualizar = next(c for c in todos(tarjeta_tasa)
-                        if isinstance(c, ft.ElevatedButton))
+                        if isinstance(c, ft.Button))
 boton_actualizar.on_click(None)
 
 ventana_tasa = dialogo_abierto(page)
@@ -519,7 +520,7 @@ def pastillas_de(raiz):
 
 
 ir_a_gastos = next(c for c in todos(vista_gestion)
-                   if isinstance(c, ft.ElevatedButton) and c.content == "Gastos")
+                   if isinstance(c, ft.Button) and c.content == "Gastos")
 ir_a_gastos.on_click(None)
 check("Gastos" in str([getattr(c, "value", "") for c in todos(vista_gestion)]),
       "se entra a la pantalla de Gastos")
@@ -636,6 +637,41 @@ buscar_control(puerta, lambda c: isinstance(c, ft.Text)
 check(bool(avisos), "aparece el aviso en la pantalla")
 check(bool(avisos) and "rota a proposito" in avisos[0].value,
       "y dice que fallo, para poder mandarlo en una captura")
+
+print()
+print("Inventario: la galeria se abre dentro del toque (iPhone)")
+# Fallo real: en el iPhone el boton de foto no hacia nada. Safari solo abre la
+# galeria si la orden sale dentro del toque, y con `pick_files()` la orden pasaba
+# por Python y llegaba tarde. Con Flet 1.0 el boton lleva `PickFiles` y la abre
+# la pantalla sola; con 0.85 (el APK) sigue el metodo de antes.
+import inspect
+from frontend import selector
+
+para_foto = bd.crear_producto("Para la galeria", "", 5.0, 19.0, stock_inicial=1)
+boton_foto = inventario_view._boton_agregar_foto(page, para_foto, lambda: None)
+if selector.ABRE_LA_PANTALLA:
+    accion = boton_foto.action
+    check(isinstance(accion, ft.PickFiles),
+          "Flet 1.0: el boton lleva PickFiles, la pantalla abre la galeria sola")
+    check(accion.with_data and accion.file_type == ft.FilePickerFileType.IMAGE,
+          "pide imagenes, con los bytes ya leidos")
+    boton_foto.on_click(None)         # el clic llega despues de abrirse
+
+    class _Archivo:
+        bytes = imagen()
+
+    class _Eleccion:
+        files = [_Archivo()]
+
+    selector.de(page).on_result(_Eleccion())
+    check(len(bd.listar_fotos(para_foto)) == 1,
+          "lo elegido se guarda en el producto que se toco")
+    selector.de(page).on_result(_Eleccion())
+    check(len(bd.listar_fotos(para_foto)) == 1,
+          "y un resultado sin toque previo no se guarda en ningun lado")
+else:
+    check(inspect.iscoroutinefunction(boton_foto.on_click),
+          "Flet 0.85 (el APK): abre la galeria con pick_files, como antes")
 
 print()
 print("Velocidad: cada pantalla va a Supabase una sola vez")
