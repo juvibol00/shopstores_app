@@ -58,7 +58,7 @@ jobs:
       # del dominio sino en /<repositorio>/. Sin esto la pagina carga en blanco,
       # porque busca sus propios archivos en una ruta que no existe.
       - name: Construir la version web
-        run: yes | flet build web --verbose --base-url vanestore_app
+        run: yes | flet build web --verbose --base-url shopstores_app
 
       - name: Ver que salio
         run: |
