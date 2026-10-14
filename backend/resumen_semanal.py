@@ -21,10 +21,10 @@ está siempre encendida. La app deja el aviso en Inicio y se manda con un toque.
 import os
 from datetime import datetime, timedelta
 
-from fpdf import FPDF
 
 from backend import basedatos
 from backend import formato
+from backend import pdf as hoja
 from backend import correo
 
 MORADO = (107, 78, 155)
@@ -84,7 +84,7 @@ def armar_pdf(d=None):
     d = d or datos()
     m = d["metricas"]
 
-    pdf = FPDF(format="A4", unit="mm")
+    pdf = hoja.hoja_a4()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.set_title("Resumen semanal")
     pdf.add_page()

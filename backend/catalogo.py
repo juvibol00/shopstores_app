@@ -20,10 +20,10 @@ Por eso no hace falta empotrar una tipografía, que sumaría peso al APK.
 import io
 from datetime import datetime
 
-from fpdf import FPDF
 
 from backend import basedatos
 from backend import formato
+from backend import pdf as hoja
 
 # Coordenadas de la hoja A4, en milímetros.
 MARGEN = 15
@@ -71,7 +71,7 @@ def armar(incluir_sin_stock=True):
             "No hay productos para el catálogo. Marca «Mostrar en el catálogo» "
             "en el inventario.")
 
-    pdf = FPDF(format="A4", unit="mm")
+    pdf = hoja.hoja_a4()
     pdf.set_auto_page_break(auto=True, margin=MARGEN)
     pdf.set_title("Catálogo")
     pdf.add_page()
