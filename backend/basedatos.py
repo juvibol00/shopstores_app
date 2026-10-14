@@ -929,6 +929,12 @@ def exportar_respaldo():
     return _rpc("exportar_respaldo")
 
 
+def restaurar_respaldo(datos):
+    """Reemplaza todo lo de la cuenta por `datos`, en una transaccion: o entra
+    entero o no cambia nada (ver `restaurar_respaldo` en `02_funciones.sql`)."""
+    return _rpc("restaurar_respaldo", **datos)
+
+
 # --------------------------------------------------------------------------
 # Resumen
 # --------------------------------------------------------------------------

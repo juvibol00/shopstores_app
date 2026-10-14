@@ -57,6 +57,13 @@ def elegir_imagen(page, al_elegir, titulo, al_fallar=None):
 
     `al_elegir(archivos)` recibe la lista elegida, con los bytes ya leidos.
     """
+    return elegir_archivo(page, al_elegir, titulo, al_fallar,
+                          tipo=ft.FilePickerFileType.IMAGE)
+
+
+def elegir_archivo(page, al_elegir, titulo, al_fallar=None,
+                   tipo=ft.FilePickerFileType.ANY):
+    """Igual que `elegir_imagen`, para cualquier archivo (un respaldo)."""
     estado = preparar(page)
     if ABRE_LA_PANTALLA:
         def anotar(e):
@@ -67,16 +74,14 @@ def elegir_imagen(page, al_elegir, titulo, al_fallar=None):
 
         return {
             "action": ft.PickFiles(estado["selector"], dialog_title=titulo,
-                                   file_type=ft.FilePickerFileType.IMAGE,
-                                   with_data=True),
+                                   file_type=tipo, with_data=True),
             "on_click": anotar,
         }
 
     async def abrir(e):
         try:
             archivos = await estado["selector"].pick_files(
-                dialog_title=titulo, file_type=ft.FilePickerFileType.IMAGE,
-                with_data=True)
+                dialog_title=titulo, file_type=tipo, with_data=True)
         except Exception as ex:
             if al_fallar:
                 al_fallar(ex)

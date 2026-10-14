@@ -20,6 +20,7 @@ from frontend import dialogos
 from frontend import estilo
 from frontend import paleta
 from frontend import pantalla
+from frontend import selector
 
 
 def crear_vista_configuracion(page, funcion_volver, al_cerrar_sesion=None):
@@ -322,6 +323,55 @@ def _cuerpo_respaldo(page, al_volver, recargar):
                           "abonos y gastos. No lleva tu PIN ni tu contraseña."),
             estilo.apunte("Quien tenga el archivo puede ver tus ventas y tus "
                           "clientes: guárdalo donde solo tú entres."),
+            ft.Divider(height=16, color=paleta.LILA),
+            estilo.seccion("Restaurar"),
+            estilo.apunte("Trae un respaldo y reemplaza todo lo que hay ahora en "
+                          "tu cuenta. No mezcla: lo que registraste después de "
+                          "la fecha del respaldo se pierde. Antes de tocar nada "
+                          "te muestra qué trae el archivo."),
+            # Abre el explorador desde la pantalla misma, dentro del toque: en el
+            # iPhone es la unica forma (ver `frontend/selector.py`).
+            ft.TextButton(
+                content="Restaurar desde un archivo",
+                style=ft.ButtonStyle(color=paleta.ERROR),
+                **selector.elegir_archivo(
+                    page,
+                    lambda archivos: _confirmar_restauracion(
+                        page, archivos[0].bytes, recargar),
+                    "Elige el respaldo",
+                    al_fallar=lambda ex: dialogos.error(
+                        page, f"No se pudo abrir el explorador: {ex}"))),
         ], spacing=12, tight=True, scroll=ft.ScrollMode.AUTO),
             padding=ft.Padding(14, 16, 14, 20), expand=True),
     ], spacing=0, expand=True)
+
+
+def _confirmar_restauracion(page, contenido, al_terminar):
+    """Dice qué trae el archivo y pide confirmación **antes** de tocar nada. Si
+    eligió el archivo equivocado, lo ve acá y cancela."""
+    try:
+        datos, cuantos, fecha = respaldo.revisar(contenido)
+    except respaldo.ErrorDeRespaldo as ex:
+        dialogos.error(page, str(ex))
+        return
+
+    def hacerlo():
+        try:
+            respaldo.restaurar(datos)
+        except ValueError as ex:
+            # En Supabase es todo o nada: si falló, la cuenta quedó como estaba.
+            dialogos.error(page, f"No se restauró nada: {ex}")
+            return
+        dialogos.exito(page, "Respaldo restaurado.")
+        al_terminar()
+
+    cuando = f"del {fecha.strftime('%d/%m/%Y')}" if fecha else "sin fecha"
+    dialogos.confirmar(
+        page, "Restaurar el respaldo",
+        f"Respaldo {cuando}: {cuantos['productos']} producto(s) con "
+        f"{cuantos['producto_fotos']} foto(s), {cuantos['clientes']} cliente(s), "
+        f"{cuantos['ventas']} venta(s) y {cuantos['gastos']} gasto(s).\n\n"
+        "Todo lo que hay ahora en tu cuenta se reemplaza por esto. Lo que "
+        "registraste después de esa fecha se pierde. Tu nombre y tu PIN no "
+        "cambian.",
+        "Restaurar", hacerlo, peligro=True)

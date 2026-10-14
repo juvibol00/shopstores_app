@@ -1102,6 +1102,176 @@ language sql stable security invoker set search_path = '' as $$
                                     where t.clave <> 'pin'), '{}'::jsonb))
 $$;
 
+-- El id nuevo de una fila del respaldo, o `null` si no esta en el mapa.
+create or replace function privado.nuevo(mapa jsonb, viejo text) returns uuid
+language sql immutable set search_path = '' as $$
+    select (mapa ->> viejo)::uuid
+$$;
+
+-- Reemplaza **todo** lo de la cuenta por lo de un respaldo. Todo o nada.
+--
+-- **Cada fila recibe un id nuevo.** Los ids son unicos en todo el proyecto, no
+-- por cuenta: si se restaura en otra cuenta (de la de pruebas a la de la
+-- vendedora) mientras la original sigue teniendo esas filas, chocarian. El mapa
+-- viejo -> nuevo se arma primero, y cada referencia (la venta de una linea, la
+-- factura de un abono) se traduce con el. Si algo apunta a una fila que el
+-- archivo no trae, el id nuevo sale `null`, la restriccion `not null` corta, y
+-- no queda nada a medias.
+--
+-- **No toca el perfil**: la huella del PIN y el nombre son de la cuenta, no de
+-- la tienda, y se quedan como estan (el respaldo ni siquiera trae el PIN).
+create or replace function public.restaurar_respaldo(p jsonb) returns jsonb
+language plpgsql security invoker set search_path = '' as $$
+declare
+    mapa jsonb;
+begin
+    if p ->> 'version' is distinct from '1' or jsonb_typeof(p -> 'productos') <> 'array'
+    then
+        perform privado.fallar('Ese archivo no es un respaldo de ShopStore''s, o es '
+                               'de una versión que esta app no conoce.');
+    end if;
+
+    select coalesce(jsonb_object_agg(viejo, gen_random_uuid()), '{}'::jsonb)
+      into mapa
+      from (select distinct fila ->> 'id' as viejo
+              from jsonb_each(p) tabla,
+                   jsonb_array_elements(case jsonb_typeof(tabla.value)
+                                            when 'array' then tabla.value
+                                            else '[]'::jsonb end) fila
+             where fila ->> 'id' is not null) ids;
+
+    -- Fuera lo de ahora, de lo que depende hacia lo que es dependido. El RLS hace
+    -- que cada `delete` alcance solo a las filas de esta cuenta.
+    delete from public.abono_aplicaciones;
+    delete from public.abonos;
+    delete from public.venta_pagos;
+    delete from public.venta_lineas;
+    delete from public.movimientos_inventario;
+    delete from public.ventas;
+    delete from public.producto_fotos;
+    delete from public.gastos;
+    delete from public.clientes;
+    delete from public.metodos_pago;
+    delete from public.productos;
+    delete from public.configuracion where clave not in ('pin', 'nombre_usuario');
+
+    -- Lo del archivo, en el orden contrario.
+    insert into public.productos (id, nombre, descripcion, costo_usd, precio_usd,
+                                  stock, en_catalogo, activo, creado_en,
+                                  actualizado_en)
+    select privado.nuevo(mapa, r.id), r.nombre, coalesce(r.descripcion, ''),
+           r.costo_usd, r.precio_usd, r.stock, coalesce(r.en_catalogo, true),
+           r.activo, r.creado_en, r.actualizado_en
+      from jsonb_to_recordset(p -> 'productos') as r(
+           id text, nombre text, descripcion text, costo_usd numeric,
+           precio_usd numeric, stock numeric, en_catalogo boolean,
+           activo boolean, creado_en timestamptz, actualizado_en timestamptz);
+
+    insert into public.producto_fotos (id, producto_id, orden, miniatura,
+                                       catalogo, completa, creado_en)
+    select privado.nuevo(mapa, r.id), privado.nuevo(mapa, r.producto_id), r.orden,
+           decode(r.miniatura, 'base64'), decode(r.catalogo, 'base64'),
+           decode(r.completa, 'base64'), r.creado_en
+      from jsonb_to_recordset(p -> 'producto_fotos') as r(
+           id text, producto_id text, orden integer, miniatura text,
+           catalogo text, completa text, creado_en timestamptz);
+
+    insert into public.clientes (id, nombre, telefono, notas, activo, creado_en,
+                                 actualizado_en)
+    select privado.nuevo(mapa, r.id), r.nombre, coalesce(r.telefono, ''),
+           coalesce(r.notas, ''), r.activo, r.creado_en, r.actualizado_en
+      from jsonb_to_recordset(p -> 'clientes') as r(
+           id text, nombre text, telefono text, notas text, activo boolean,
+           creado_en timestamptz, actualizado_en timestamptz);
+
+    insert into public.metodos_pago (id, nombre, moneda, orden, activo, creado_en,
+                                     actualizado_en)
+    select privado.nuevo(mapa, r.id), r.nombre, r.moneda, r.orden, r.activo,
+           r.creado_en, r.actualizado_en
+      from jsonb_to_recordset(p -> 'metodos_pago') as r(
+           id text, nombre text, moneda text, orden integer, activo boolean,
+           creado_en timestamptz, actualizado_en timestamptz);
+
+    insert into public.ventas (id, correlativo, cliente_id, fecha, tipo, total_usd,
+                               tasa_usada, fecha_pago_prevista, estado)
+    select privado.nuevo(mapa, r.id), r.correlativo,
+           privado.nuevo(mapa, r.cliente_id), r.fecha, r.tipo, r.total_usd,
+           r.tasa_usada, r.fecha_pago_prevista, r.estado
+      from jsonb_to_recordset(p -> 'ventas') as r(
+           id text, correlativo integer, cliente_id text, fecha timestamptz,
+           tipo text, total_usd numeric, tasa_usada numeric,
+           fecha_pago_prevista date, estado text);
+
+    insert into public.venta_lineas (id, venta_id, producto_id, nombre_congelado,
+                                     cantidad, precio_unit_usd, costo_unit_usd)
+    select privado.nuevo(mapa, r.id), privado.nuevo(mapa, r.venta_id),
+           privado.nuevo(mapa, r.producto_id), r.nombre_congelado, r.cantidad,
+           r.precio_unit_usd, r.costo_unit_usd
+      from jsonb_to_recordset(p -> 'venta_lineas') as r(
+           id text, venta_id text, producto_id text, nombre_congelado text,
+           cantidad numeric, precio_unit_usd numeric, costo_unit_usd numeric);
+
+    insert into public.venta_pagos (id, venta_id, metodo_id, metodo_nombre, moneda,
+                                    monto, monto_usd)
+    select privado.nuevo(mapa, r.id), privado.nuevo(mapa, r.venta_id),
+           privado.nuevo(mapa, r.metodo_id), r.metodo_nombre, r.moneda, r.monto,
+           r.monto_usd
+      from jsonb_to_recordset(p -> 'venta_pagos') as r(
+           id text, venta_id text, metodo_id text, metodo_nombre text,
+           moneda text, monto numeric, monto_usd numeric);
+
+    -- `referencia_id` no es una clave foranea (puede ser una venta o nada): se
+    -- traduce si esta en el mapa y si no queda vacia.
+    insert into public.movimientos_inventario (id, producto_id, delta, motivo,
+                                               referencia_id, nota, fecha)
+    select privado.nuevo(mapa, r.id), privado.nuevo(mapa, r.producto_id), r.delta,
+           r.motivo, privado.nuevo(mapa, r.referencia_id), coalesce(r.nota, ''),
+           r.fecha
+      from jsonb_to_recordset(p -> 'movimientos_inventario') as r(
+           id text, producto_id text, delta numeric, motivo text,
+           referencia_id text, nota text, fecha timestamptz);
+
+    insert into public.abonos (id, cliente_id, fecha, monto_usd, moneda_recibida,
+                               monto_recibido, tasa_usada, metodo_id,
+                               metodo_nombre, nota)
+    select privado.nuevo(mapa, r.id), privado.nuevo(mapa, r.cliente_id), r.fecha,
+           r.monto_usd, r.moneda_recibida, r.monto_recibido, r.tasa_usada,
+           privado.nuevo(mapa, r.metodo_id), coalesce(r.metodo_nombre, ''),
+           coalesce(r.nota, '')
+      from jsonb_to_recordset(p -> 'abonos') as r(
+           id text, cliente_id text, fecha timestamptz, monto_usd numeric,
+           moneda_recibida text, monto_recibido numeric, tasa_usada numeric,
+           metodo_id text, metodo_nombre text, nota text);
+
+    insert into public.abono_aplicaciones (id, abono_id, venta_id, monto_usd)
+    select privado.nuevo(mapa, r.id), privado.nuevo(mapa, r.abono_id),
+           privado.nuevo(mapa, r.venta_id), r.monto_usd
+      from jsonb_to_recordset(p -> 'abono_aplicaciones') as r(
+           id text, abono_id text, venta_id text, monto_usd numeric);
+
+    insert into public.gastos (id, fecha, categoria, descripcion, monto_usd,
+                               moneda_pagada, monto_pagado, tasa_usada, activo)
+    select privado.nuevo(mapa, r.id), r.fecha, r.categoria,
+           coalesce(r.descripcion, ''), r.monto_usd, r.moneda_pagada,
+           r.monto_pagado, r.tasa_usada, r.activo
+      from jsonb_to_recordset(p -> 'gastos') as r(
+           id text, fecha timestamptz, categoria text, descripcion text,
+           monto_usd numeric, moneda_pagada text, monto_pagado numeric,
+           tasa_usada numeric, activo boolean);
+
+    insert into public.configuracion (clave, valor)
+    select c.key, c.value
+      from jsonb_each_text(coalesce(p -> 'configuracion', '{}'::jsonb)) c
+     where c.key not in ('pin', 'nombre_usuario')
+    on conflict (user_id, clave) do update set valor = excluded.valor;
+
+    return jsonb_build_object(
+        'productos', (select count(*) from public.productos),
+        'ventas', (select count(*) from public.ventas),
+        'clientes', (select count(*) from public.clientes));
+end
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Varias lecturas en un solo viaje
 -- ---------------------------------------------------------------------------

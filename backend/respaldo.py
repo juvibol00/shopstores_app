@@ -15,8 +15,10 @@ Es un `.zip` con dos cosas adentro:
 **No lleva la huella del PIN** (no sirve para recuperar nada y facilita
 adivinarlo), ni la sesion, ni contrasenas.
 
-Por ahora solo se baja: no hay boton para restaurar. Si algun dia hace falta, el
-archivo tiene todo lo necesario, con los mismos ids.
+**Restaurar reemplaza todo** lo de la cuenta por lo del archivo, no mezcla, y
+conserva el perfil (nombre y PIN) de la cuenta donde se restaura. Antes de tocar
+nada, `revisar` lee el archivo y dice que trae, para que se vea a tiempo si es el
+equivocado.
 """
 
 import io
@@ -64,10 +66,43 @@ def armar():
     return salida.getvalue(), cuantos
 
 
+class ErrorDeRespaldo(Exception):
+    """El archivo no sirve para restaurar. El mensaje es para mostrarlo."""
+
+
 def leer(contenido):
-    """Lo que hay adentro de un respaldo, como diccionario. Para revisarlo."""
-    with zipfile.ZipFile(io.BytesIO(contenido)) as z:
-        return json.loads(z.read("datos.json").decode("utf-8"))
+    """Lo que hay adentro de un respaldo, como diccionario.
+
+    Lanza `ErrorDeRespaldo` con un texto para la pantalla si el archivo no es un
+    respaldo: se elige desde la carpeta de descargas, donde hay de todo.
+    """
+    try:
+        with zipfile.ZipFile(io.BytesIO(contenido or b"")) as z:
+            datos = json.loads(z.read("datos.json").decode("utf-8"))
+    except (zipfile.BadZipFile, KeyError, ValueError, UnicodeDecodeError):
+        raise ErrorDeRespaldo("Ese archivo no es un respaldo de ShopStore's. "
+                              "Busca uno que se llame respaldo-shopstores-....zip."
+                              ) from None
+    if not isinstance(datos, dict) or datos.get("version") != 1:
+        raise ErrorDeRespaldo("Ese respaldo es de una versión que esta app no "
+                              "conoce.")
+    return datos
+
+
+def revisar(contenido):
+    """Devuelve `(datos, cuantos, fecha)` sin tocar nada: lo que se va a
+    restaurar, para mostrarlo y pedir confirmacion."""
+    datos = leer(contenido)
+    cuantos = {tabla: len(datos.get(tabla) or []) for tabla in LO_QUE_SE_CUENTA}
+    fecha = None
+    if datos.get("creado_en"):
+        fecha = datetime.fromisoformat(datos["creado_en"]).astimezone().date()
+    return datos, cuantos, fecha
+
+
+def restaurar(datos):
+    """Reemplaza todo lo de la cuenta por `datos` (lo que devolvio `revisar`)."""
+    return basedatos.restaurar_respaldo(datos)
 
 
 def marcar_hecho():

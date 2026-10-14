@@ -238,6 +238,151 @@ if descargas.PUEDE_ENLAZAR:
         boton.on_click(None)
     check(avisado == [True], "al tocar Descargar se anota como hecho")
 
+
+print("\nRestaurar: vuelve exactamente lo que habia")
+from backend import perfil  # noqa: E402
+perfil.guardar_nombre("Juan")
+
+
+def foto_de_la_tienda():
+    productos = bd.listar_productos()
+    fotos_ = bd.listar_fotos(productos[0]["id"], con_datos=True) if productos else []
+    return fotos_[0]["completa"] if fotos_ else None
+
+
+def foto_de_la_tienda_y_estado():
+    clientes = bd.listar_clientes()
+    return {
+        "productos": sorted((p["nombre"], float(p["stock"]), float(p["precio_usd"]))
+                            for p in bd.listar_productos()),
+        "saldo": bd.saldo_cliente(clientes[0]["id"]) if clientes else None,
+        "vendido": bd.metricas("mes")["vendido"],
+        "cobrado": bd.metricas("mes")["entro_en_caja"],
+        "ventas": bd.contar_ventas(),
+        "gastos": len(bd.listar_gastos()),
+        "tasa": bd.leer_tasa(),
+        "foto": foto_de_la_tienda(),
+    }
+
+
+antes = foto_de_la_tienda_y_estado()
+guardado, _ = respaldo.armar()
+
+# Se ensucia la cuenta: lo que se haga despues del respaldo se tiene que perder.
+bd.eliminar_producto(cartera)
+bd.crear_producto("Comprado despues", "", 1.0, 2.0, stock_inicial=9)
+bd.guardar_tasa(700.0)
+bd.crear_gasto("Publicidad", "", 8.0)
+check(foto_de_la_tienda_y_estado() != antes, "la cuenta cambio despues del respaldo")
+
+datos_r, cuantos_r, fecha_r = respaldo.revisar(guardado)
+check(cuantos_r["productos"] == 1 and cuantos_r["ventas"] == 2 and fecha_r,
+      "revisar dice que trae y de que fecha es, sin tocar nada")
+check(bd.contar_productos() == 1 and bd.listar_productos()[0]["nombre"]
+      == "Comprado despues", "revisar no toco la cuenta")
+
+respaldo.restaurar(datos_r)
+despues = foto_de_la_tienda_y_estado()
+for clave in ("productos", "saldo", "vendido", "cobrado", "ventas", "gastos",
+              "tasa"):
+    check(despues[clave] == antes[clave],
+          f"vuelve igual: {clave} ({despues[clave]} = {antes[clave]})")
+check(despues["foto"] == antes["foto"] and despues["foto"] is not None,
+      "la foto vuelve entera")
+check(seguridad.verificar("472913"), "el PIN de la cuenta sigue sirviendo")
+check(perfil.nombre() == "Juan", "y el nombre no cambia")
+
+respaldo.restaurar(datos_r)
+check(foto_de_la_tienda_y_estado() == despues,
+      "restaurar dos veces el mismo archivo da lo mismo")
+
+print("\nRestaurar en otra cuenta, con la original intacta")
+# El caso de pasar los datos de prueba a la cuenta de la vendedora: los ids son
+# unicos en todo el proyecto, asi que sin ids nuevos chocarian.
+transporte_propio = nube.transporte
+nube.transporte = otra
+bd.olvidar_lo_leido()
+try:
+    respaldo.restaurar(datos_r)
+    en_la_otra = [p["nombre"] for p in bd.listar_productos()]
+    otra_saldo = bd.saldo_cliente(bd.listar_clientes()[0]["id"])
+finally:
+    nube.transporte = transporte_propio
+    bd.olvidar_lo_leido()
+check(en_la_otra == ["Cartera"],
+      "la otra cuenta queda con lo del archivo, sin lo que tenia")
+check(otra_saldo == antes["saldo"], "con las deudas bien enlazadas")
+check([p["nombre"] for p in bd.listar_productos()] == ["Cartera"]
+      and bd.saldo_cliente(bd.listar_clientes()[0]["id"]) == antes["saldo"],
+      "y la cuenta original no se toco")
+
+print("\nArchivos que no sirven")
+for contenido_malo, motivo in [
+    (b"esto no es un zip", "un archivo que no es zip"),
+    (None, "un archivo vacio"),
+]:
+    try:
+        respaldo.revisar(contenido_malo)
+        check(False, f"rechaza {motivo}")
+    except respaldo.ErrorDeRespaldo:
+        check(True, f"rechaza {motivo}")
+
+
+def zip_con(nombre, texto):
+    b = io.BytesIO()
+    with zipfile.ZipFile(b, "w") as z:
+        z.writestr(nombre, texto)
+    return b.getvalue()
+
+
+for contenido_malo, motivo in [
+    (zip_con("otra_cosa.txt", "hola"), "un zip que no trae datos.json"),
+    (zip_con("datos.json", '{"version": 99}'), "un respaldo de una version futura"),
+]:
+    try:
+        respaldo.revisar(contenido_malo)
+        check(False, f"rechaza {motivo}")
+    except respaldo.ErrorDeRespaldo:
+        check(True, f"rechaza {motivo}")
+
+print("\nTodo o nada")
+import copy  # noqa: E402
+roto = copy.deepcopy(datos_r)
+roto["venta_lineas"][0]["producto_id"] = "00000000-0000-0000-0000-000000000000"
+roto["productos"][0]["nombre"] = "No deberia quedar"
+antes_roto = foto_de_la_tienda_y_estado()
+try:
+    respaldo.restaurar(roto)
+    check(False, "un archivo con una referencia rota no se restaura")
+except ValueError:
+    check(True, "un archivo con una referencia rota no se restaura")
+check(foto_de_la_tienda_y_estado() == antes_roto,
+      "y la cuenta queda exactamente como estaba, sin nada a medias")
+
+print("\nLa pantalla del respaldo")
+import inspect  # noqa: E402
+from frontend.vistas import configuracion_view  # noqa: E402
+
+
+def todos(control):
+    yield control
+    for atributo in ("controls", "content"):
+        v = getattr(control, atributo, None)
+        for hijo in (v if isinstance(v, list) else [v] if v is not None else []):
+            if hasattr(hijo, "__class__") and hijo.__class__.__module__.startswith("flet"):
+                yield from todos(hijo)
+
+
+pantalla_r = configuracion_view._respaldo(Pagina(), lambda: None)
+restaurar_b = next((c for c in todos(pantalla_r) if isinstance(c, ft.TextButton)
+                    and c.content == "Restaurar desde un archivo"), None)
+check(restaurar_b is not None, "tiene el boton Restaurar desde un archivo")
+if selector.ABRE_LA_PANTALLA:
+    check(isinstance(restaurar_b.action, ft.PickFiles),
+          "Flet 1.0: abre el explorador dentro del toque, como en el iPhone")
+else:
+    check(inspect.iscoroutinefunction(restaurar_b.on_click),
+          "Flet 0.85: abre el explorador como antes")
 bd.cerrar()
 shutil.rmtree(TEMPORAL, ignore_errors=True)
 print(f"\n{'TODO BIEN' if not fallos else 'FALLARON: ' + ', '.join(fallos)}")
