@@ -19,6 +19,40 @@ os.makedirs(BASE, exist_ok=True)
 RUTA_BASE_DATOS = os.path.join(BASE, "shopstores.db")
 RUTA_CONFIG = os.path.join(BASE, "config.json")
 
+# El nombre que tenia la base antes de que la aplicacion se llamara ShopStore's.
+_NOMBRE_ANTERIOR = os.path.join(BASE, "vanesstore.db")
+
+
+def _heredar_la_base_vieja():
+    """Si queda una base con el nombre anterior, se adopta.
+
+    Nace de un error de verdad: al renombrar la aplicacion se cambio tambien el
+    nombre del archivo, y la siguiente vez que abrio **no encontro nada y empezo
+    de cero**. Los datos no se habian perdido —el archivo viejo seguia ahi al
+    lado— pero en pantalla se veia exactamente igual que perderlos.
+
+    Solo actua si **no hay** base con el nombre nuevo: si ya existe una, aunque
+    este vacia, es la que manda. Pisar algo que la persona ya empezo a usar seria
+    peor que no hacer nada.
+    """
+    if os.path.exists(RUTA_BASE_DATOS) or not os.path.exists(_NOMBRE_ANTERIOR):
+        return
+    try:
+        os.replace(_NOMBRE_ANTERIOR, RUTA_BASE_DATOS)
+        # Los archivos del modo WAL acompanan a la base; sin ellos se perderia lo
+        # ultimo que se escribio antes de cerrar.
+        for sufijo in ("-wal", "-shm"):
+            viejo = _NOMBRE_ANTERIOR + sufijo
+            if os.path.exists(viejo):
+                os.replace(viejo, RUTA_BASE_DATOS + sufijo)
+    except OSError:
+        # Si no se puede mover, la aplicacion abre igual con una base nueva. El
+        # archivo viejo se queda donde esta y no se pierde nada.
+        pass
+
+
+_heredar_la_base_vieja()
+
 
 def _leer():
     try:

@@ -131,6 +131,31 @@ check(len(adjuntos) == 1, "y viaja con el nombre que lleva la fecha")
 check(adjuntos[0].get_payload(decode=True) == copia,
       "el archivo llega entero, byte por byte")
 
+print()
+print("Heredar la base con el nombre viejo")
+# Error real: al renombrar la aplicacion se cambio el nombre del archivo de la
+# base, y al abrir no encontro nada y empezo de cero. Los datos estaban al lado,
+# en el archivo viejo, pero en pantalla se veia igual que haberlos perdido.
+viejo = os.path.join(TEMPORAL, "vanesstore.db")
+nuevo = os.path.join(TEMPORAL, "heredada.db")
+almacenamiento._NOMBRE_ANTERIOR = viejo
+almacenamiento.RUTA_BASE_DATOS = nuevo
+
+open(viejo, "wb").write(copia)
+almacenamiento._heredar_la_base_vieja()
+check(os.path.exists(nuevo) and not os.path.exists(viejo),
+      "una base con el nombre anterior se adopta con el nombre nuevo")
+check(open(nuevo, "rb").read() == copia, "y llega entera")
+
+# Si ya hay una con el nombre nuevo no se pisa: aunque este vacia, es la que la
+# persona esta usando, y pisarla seria peor que no hacer nada.
+open(viejo, "wb").write(b"la vieja")
+open(nuevo, "wb").write(b"la que vale")
+almacenamiento._heredar_la_base_vieja()
+check(open(nuevo, "rb").read() == b"la que vale",
+      "y si ya hay una con el nombre nuevo, NO se pisa")
+check(os.path.exists(viejo), "la vieja se queda donde esta, sin borrarse")
+
 bd.cerrar()
 shutil.rmtree(TEMPORAL, ignore_errors=True)
 print(f"\n{'TODO BIEN' if not fallos else 'FALLARON: ' + ', '.join(fallos)}")
