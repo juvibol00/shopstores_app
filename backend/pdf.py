@@ -1,6 +1,6 @@
 """La hoja en blanco de los PDF, cargada recien cuando hace falta.
 
-`fpdf2` arma el catalogo y el resumen semanal. Se importa **aca adentro, al pedir
+`fpdf2` arma el resumen semanal. Se importa **aca adentro, al pedir
 una hoja**, y no arriba de los archivos, por dos razones que salieron de la version
 para navegador:
 

@@ -1,11 +1,10 @@
-"""Enviar el catálogo por correo.
+"""Enviar PDFs por correo: el resumen semanal.
 
 Es la vía por la que el PDF sale del teléfono, y se eligió porque `smtplib` está en
 la biblioteca estándar y **no le pide nada a Android**: ni permisos, ni plugin, ni
 acceso a carpetas compartidas. Verificado en la Fase 0 contra Gmail.
 
-Sirve para dos cosas: mandárselo a un cliente que use correo, y —más importante—
-mandárselo a una misma. Al abrirlo en el teléfono y descargar el adjunto, WhatsApp
+Se lo manda una misma: al abrirlo en el teléfono y descargar el adjunto, WhatsApp
 ya lo ve y lo puede reenviar. Aunque nunca funcione el menú de compartir de Android,
 el PDF siempre tiene por dónde salir.
 
@@ -96,7 +95,7 @@ def armar_mensaje(remitente, destino, asunto, adjunto, nombre_archivo,
     mensaje["From"] = remitente
     mensaje["To"] = destino
     mensaje["Subject"] = asunto
-    mensaje.set_content(cuerpo or "Te mando el catálogo actualizado.")
+    mensaje.set_content(cuerpo or "Adjunto va el archivo.")
     if html:
         identificador = make_msgid()[1:-1]
         mensaje.add_alternative(html.replace("{{logo}}", f"cid:{identificador}"),
@@ -109,12 +108,12 @@ def armar_mensaje(remitente, destino, asunto, adjunto, nombre_archivo,
     return mensaje
 
 
-def enviar_pdf(destino, pdf, asunto="Catálogo", cuerpo=None,
-               nombre_archivo="catalogo.pdf", html=None, logo=None,
+def enviar_pdf(destino, pdf, asunto="ShopStore's", cuerpo=None,
+               nombre_archivo="documento.pdf", html=None, logo=None,
                tipo="pdf"):
     """Manda un PDF adjunto. Lanza `ErrorDeCorreo` con un texto para mostrar.
 
-    Sirve para el catálogo, para el resumen semanal y para el respaldo de la
+    Sirve para el resumen semanal y para el respaldo de la
     base: lo único que cambia es el asunto, el cuerpo, el nombre del archivo y
     `tipo`, que es lo que el programa de correo usa para saber qué adjuntó.
 

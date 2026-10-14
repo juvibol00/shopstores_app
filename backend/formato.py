@@ -6,7 +6,7 @@ Estaba copiado por todas partes: `_dinero` ocho veces, `_bolivares` cinco,
 cambie cómo se escribe un monto, hay que acordarse de ocho archivos**. Con una
 copia sola, no hay nada que recordar.
 
-No importa `flet` a propósito. Esto lo usan también el PDF del catálogo, el del
+No importa `flet` a propósito. Esto lo usan también el PDF del
 resumen semanal y los correos, que no tienen pantalla; si arrastrara la interfaz,
 no se podría usar desde ahí.
 """

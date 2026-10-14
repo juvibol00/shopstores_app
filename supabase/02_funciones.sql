@@ -1029,7 +1029,7 @@ language sql stable security invoker set search_path = '' as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- Resumen y catalogo
+-- Resumen
 -- ---------------------------------------------------------------------------
 
 create or replace function public.resumen_inventario(p jsonb) returns jsonb
@@ -1044,19 +1044,9 @@ language sql stable security invoker set search_path = '' as $$
       from public.productos where activo
 $$;
 
--- Los marcados para el catalogo, con la foto de catalogo de su foto principal.
-create or replace function public.productos_del_catalogo(p jsonb) returns jsonb
-language sql stable security invoker set search_path = '' as $$
-    select coalesce(jsonb_agg(jsonb_build_object(
-               'id', pr.id, 'nombre', pr.nombre, 'descripcion', pr.descripcion,
-               'precio_usd', pr.precio_usd, 'stock', pr.stock,
-               'foto', encode(f.catalogo, 'base64'))
-               order by lower(pr.nombre)), '[]'::jsonb)
-      from public.productos pr
-      left join public.producto_fotos f on f.producto_id = pr.id and f.orden = 1
-     where pr.activo and pr.en_catalogo
-       and (coalesce((p ->> 'incluir_sin_stock')::boolean, true) or pr.stock > 0)
-$$;
+-- El catalogo en PDF se quito de la app. Si un proyecto ya tenia su funcion,
+-- se borra: no le sirve a nadie.
+drop function if exists public.productos_del_catalogo(jsonb);
 
 -- ---------------------------------------------------------------------------
 -- Varias lecturas en un solo viaje

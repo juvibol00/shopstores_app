@@ -20,30 +20,22 @@ from backend import formato
 from frontend import paleta
 from frontend import pantalla
 from frontend import selector
-from frontend.vistas.catalogo_view import crear_vista_catalogo
 
 POR_TANDA = 40
 
 
-def crear_vista_inventario(page, al_configurar_correo=None):
+def crear_vista_inventario(page):
     contenedor = ft.Container(expand=True)
 
     def mostrar_lista():
-        contenedor.content = _lista(page, mostrar_ficha, mostrar_catalogo)
+        contenedor.content = _lista(page, mostrar_ficha)
         page.update()
 
     def mostrar_ficha(producto_id):
         contenedor.content = _ficha(page, producto_id, mostrar_lista)
         page.update()
 
-    def mostrar_catalogo():
-        # El catálogo cuelga de Inventario porque es una vista de los mismos
-        # productos: qué se muestra y a qué precio.
-        contenedor.content = crear_vista_catalogo(
-            page, mostrar_lista, al_configurar_correo or (lambda: None))
-        page.update()
-
-    contenedor.content = _lista(page, mostrar_ficha, mostrar_catalogo)
+    contenedor.content = _lista(page, mostrar_ficha)
     return contenedor
 
 
@@ -51,7 +43,7 @@ def crear_vista_inventario(page, al_configurar_correo=None):
 # Lista
 # ==========================================================================
 
-def _lista(page, al_abrir, al_ver_catalogo):
+def _lista(page, al_abrir):
     estado = {"busqueda": "", "tope": POR_TANDA}
 
     filas = ft.Column(spacing=8, tight=True)
@@ -160,9 +152,6 @@ def _lista(page, al_abrir, al_ver_catalogo):
                     estilo.titulo("Inventario", size=20),
                     resumen,
                 ], spacing=1, tight=True, expand=True),
-                ft.IconButton(icon=ft.Icons.PICTURE_AS_PDF,
-                              icon_color=paleta.MARCA, tooltip="Catálogo",
-                              on_click=lambda e: al_ver_catalogo()),
                 ft.IconButton(icon=ft.Icons.ADD, icon_color=paleta.FONDO,
                               bgcolor=paleta.MARCA, on_click=nuevo,
                               tooltip="Agregar producto"),
@@ -251,8 +240,8 @@ def _cuerpo_ficha(page, producto_id, al_volver, recargar):
     def borrar(e):
         dialogos.confirmar(
             page, "Borrar producto",
-            f"«{producto['nombre']}» deja de aparecer en el inventario, la venta y "
-            "el catálogo. Las ventas que ya se hicieron con él no se tocan.",
+            f"«{producto['nombre']}» deja de aparecer en el inventario y en la "
+            "venta. Las ventas que ya se hicieron con él no se tocan.",
             "Borrar", lambda: _borrar(page, producto_id, al_volver), peligro=True)
 
     return ft.Column([
@@ -348,8 +337,8 @@ def _miniatura(page, fila, recargar):
         dialogos.confirmar(
             page,
             "Foto principal" if fila["orden"] != 1 else "Borrar foto",
-            ("Esta foto pasa a ser la principal: la que se ve en la lista, en la "
-             "venta y en el catálogo." if fila["orden"] != 1 else
+            ("Esta foto pasa a ser la principal: la que se ve en la lista y en la "
+             "venta." if fila["orden"] != 1 else
              "La foto se borra del teléfono y no se puede recuperar."),
             "Hacerla principal" if fila["orden"] != 1 else "Borrar",
             hacer_principal if fila["orden"] != 1 else eliminar,
@@ -411,7 +400,7 @@ def _formulario_producto(page, producto_id, al_terminar):
     nombre = ft.TextField(label="Nombre", value=existente["nombre"] if existente else "",
                           border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     descripcion = ft.TextField(
-        label="Descripción (sale en el catálogo)",
+        label="Descripción",
         value=existente["descripcion"] if existente else "",
         border_color=paleta.LILA, focused_border_color=paleta.MARCA)
     costo = ft.TextField(label="Costo de compra ($)",
@@ -426,9 +415,6 @@ def _formulario_producto(page, producto_id, al_terminar):
                                  keyboard_type=ft.KeyboardType.NUMBER,
                                  border_color=paleta.LILA,
                                  focused_border_color=paleta.MARCA)
-    en_catalogo = ft.Switch(label="Mostrar en el catálogo",
-                            value=bool(existente["en_catalogo"]) if existente else True,
-                            active_color=paleta.MARCA)
     margen_vivo = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.TEXTO_SUAVE)
     problema = ft.Text("", size=12, weight=estilo.MEDIO, color=paleta.ERROR)
 
@@ -471,11 +457,10 @@ def _formulario_producto(page, producto_id, al_terminar):
             return
 
         if existente is None:
-            basedatos.crear_producto(nombre.value, descripcion.value, c, p, s,
-                                     en_catalogo.value)
+            basedatos.crear_producto(nombre.value, descripcion.value, c, p, s)
         else:
             basedatos.actualizar_producto(producto_id, nombre.value,
-                                          descripcion.value, c, p, en_catalogo.value)
+                                          descripcion.value, c, p)
         dialogos.cerrar(page, dialogo)
         dialogos.exito(page, "Producto guardado.")
         al_terminar()
@@ -483,7 +468,7 @@ def _formulario_producto(page, producto_id, al_terminar):
     campos = [nombre, descripcion, costo, precio]
     if existente is None:
         campos.append(stock_inicial)
-    campos += [en_catalogo, margen_vivo, problema]
+    campos += [margen_vivo, problema]
 
     dialogo = ft.AlertDialog(
         modal=True,

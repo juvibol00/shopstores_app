@@ -90,7 +90,7 @@ def _menu(page, funcion_volver, abrir):
             # una exportacion de la cuenta.
             _tarjeta("Respaldo", "Se está adaptando a la nube",
                      pendiente="pronto"),
-            _tarjeta("Correo del catálogo",
+            _tarjeta("Correo",
                      "Configurado" if correo.configurado()
                      else "Sin configurar",
                      lambda e: abrir("correo")),
@@ -278,7 +278,7 @@ def _cambiar_pin(page, al_volver):
 
 
 # ==========================================================================
-# El correo por donde sale el catálogo
+# El correo por donde sale el resumen semanal
 # ==========================================================================
 
 def _correo(page, al_volver):
@@ -328,7 +328,7 @@ def _correo(page, al_volver):
         dialogos.confirmar(
             page, "Olvidar el correo",
             "Se borran el remitente y la clave de aplicación de este teléfono. "
-            "El catálogo se seguirá pudiendo generar, pero no enviar.",
+            "El resumen semanal ya no se podrá enviar.",
             "Olvidar", borrar, peligro=True)
 
     acciones = [estilo.boton("Guardar", guardar, ancho=400, alto=46)]
@@ -338,8 +338,8 @@ def _correo(page, al_volver):
                                       style=ft.ButtonStyle(color=paleta.ERROR)))
 
     return ft.Column([
-        _cabecera("Correo del catálogo", al_volver,
-                  "Por aquí sale el PDF del teléfono"),
+        _cabecera("Correo", al_volver,
+                  "Por aquí te llega el resumen semanal"),
         ft.Container(content=ft.Column(aviso + [
             remitente, clave, destino, problema, *acciones,
             ft.Container(height=6),

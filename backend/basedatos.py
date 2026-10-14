@@ -55,7 +55,7 @@ LECTURAS = frozenset({
     "resumen_ventas", "facturas_pendientes", "clientes_con_saldo",
     "total_por_cobrar", "abonos_de_cliente", "listar_gastos",
     "categorias_de_gasto", "metricas", "top_productos", "gastos_por_categoria",
-    "ventas_para_serie", "resumen_inventario", "productos_del_catalogo", "lote",
+    "ventas_para_serie", "resumen_inventario", "lote",
 })
 
 # **Lo ya leido, para no volver a viajar.** Ver "Leer una vez" mas abajo.
@@ -315,7 +315,7 @@ def crear_producto(nombre, descripcion, costo_usd, precio_usd, stock_inicial=0,
 
 
 def actualizar_producto(producto_id, nombre, descripcion, costo_usd, precio_usd,
-                        en_catalogo):
+                        en_catalogo=True):
     """No toca el stock. El stock solo cambia por un movimiento, nunca escribiendo
     un total: ver `ajustar_stock` y `reabastecer`."""
     _rpc("actualizar_producto", id=producto_id, nombre=nombre.strip(),
@@ -916,16 +916,8 @@ def _inicio_del_dia_utc():
 
 
 # --------------------------------------------------------------------------
-# Resumen y catalogo
+# Resumen
 # --------------------------------------------------------------------------
 
 def resumen_inventario():
     return _rpc("resumen_inventario")
-
-
-def productos_del_catalogo(incluir_sin_stock=True):
-    """Los marcados para el catalogo, con la foto de catalogo de su principal."""
-    filas = _rpc("productos_del_catalogo", incluir_sin_stock=incluir_sin_stock)
-    for f in filas:
-        f["foto"] = _a_bytes(f.get("foto"))
-    return filas

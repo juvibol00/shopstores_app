@@ -188,7 +188,7 @@ def _aviso_resumen(page, al_terminar):
 
     def enviar(e):
         def mandar():
-            # Igual que el catálogo: el correo tarda, así que va a otro hilo.
+            # El correo tarda, así que va a otro hilo.
             def trabajo():
                 resumen_semanal.enviar()
                 return True, "Resumen de la semana enviado."

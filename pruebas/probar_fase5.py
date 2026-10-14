@@ -18,9 +18,7 @@ import postgres_local
 # La base de la app ahora es Supabase: cada suite usa una base nueva en un
 # Postgres local, con las mismas funciones que se pegan en el panel.
 _pg = postgres_local.conectar_la_app()
-from backend import catalogo
 from backend import correo
-from backend import fotos
 from backend import seguridad
 
 fallos = []
@@ -122,47 +120,8 @@ seguridad.verificar("819274")
 check(correo.leer_configuracion()["clave"] == "abcdefghijklmnop",
       "y la clave se sigue leyendo tras reabrir")
 
-print("\nEl catálogo")
-try:
-    catalogo.armar(True); check(False, "sin productos avisa en vez de reventar")
-except catalogo.SinProductos:
-    check(True, "sin productos avisa en vez de reventar")
-
-con_foto = bd.crear_producto("Cartera de cuero", "Cuero natural, 30x22",
-                             20.0, 45.0, stock_inicial=5)
-bd.guardar_foto(con_foto, fotos.preparar(imagen()))
-sin_foto = bd.crear_producto("Pulsera tejida", "Hilo encerado", 3.0, 8.5,
-                             stock_inicial=10)
-agotado = bd.crear_producto("Bolso de mano", "Forro interior", 30.0, 68.0,
-                            stock_inicial=0)
-bd.guardar_foto(agotado, fotos.preparar(imagen("#8B6340")))
-oculto = bd.crear_producto("No mostrar", "", 1.0, 2.0, stock_inicial=5)
-bd.actualizar_producto(oculto, "No mostrar", "", 1.0, 2.0, en_catalogo=False)
-
-c = catalogo.cuantos_entran(True)
-check(c["total"] == 3, "cuenta 3 productos con el interruptor encendido")
-check(c["a_pedido"] == 1, "de los cuales 1 va a pedido")
-check(c["sin_foto"] == 1, "y 1 sin foto")
-check(catalogo.cuantos_entran(False)["total"] == 2, "apagado, solo los que hay")
-
-pdf, cuantos, paginas = catalogo.armar(True)
-check(pdf[:5] == b"%PDF-", "sale un PDF de verdad")
-check(cuantos == 3 and paginas == 1, "3 productos en 1 página")
-texto = texto_del_pdf(pdf)
-check(b"Cartera" in texto, "el texto se puede leer descomprimido")
-check(b"No mostrar" not in texto, "el producto excluido no aparece")
-check(b"Shop" not in texto and b"Shop" not in pdf,
-      "el nombre del negocio NO aparece, ni comprimido ni en claro")
-check(b"A pedido" in texto, "el agotado sale marcado A pedido")
-check(b"Cat" in texto, "el encabezado dice Catálogo")
-open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "catalogo_muestra.pdf"), "wb").write(pdf)
-
-pdf_corto, cuantos, _ = catalogo.armar(False)
-check(cuantos == 2, "apagado el interruptor, entran 2")
-check(b"Bolso" not in texto_del_pdf(pdf_corto), "el agotado queda fuera")
-check(b"Bolso" in texto, "y dentro cuando se incluye")
-check(b"A pedido" not in texto_del_pdf(pdf_corto),
-      "y sin agotados no queda ningún «A pedido»")
+# Un PDF cualquiera para probar el envio: lo que importa es el correo.
+pdf = b"%PDF-1.4\n% prueba\n"
 
 print("\nEnvío: los rechazos que no necesitan red")
 try:
@@ -244,36 +203,6 @@ check("{{logo}}" not in partes_html[0].get_content(),
       "el hueco del logo queda reemplazado por la imagen incrustada")
 check("cid:" in partes_html[0].get_content(),
       "que se nombra como imagen interna, no como enlace de afuera")
-
-print()
-print("El correo con el que sale el catálogo")
-texto_cat = catalogo.cuerpo_texto(0)
-html_cat = catalogo.cuerpo_html(0)
-
-check("Saludos cordiales" in texto_cat and "Catálogo" in html_cat,
-      "saluda y se presenta como catálogo")
-check("Shop" not in html_cat and "Shop" not in texto_cat,
-      "va SIN el nombre del negocio, igual que el PDF")
-check("no responder" not in html_cat.lower()
-      and "responder a este correo" in html_cat,
-      "y aquí sí se invita a responder: es un correo a un cliente")
-check("#F1EBFA" in html_cat and "#6B4E9B" in html_cat,
-      "usa la misma paleta que el del resumen semanal")
-
-check("A pedido" not in catalogo.cuerpo_html(0),
-      "sin agotados no se menciona lo de «A pedido»")
-check("A pedido" in catalogo.cuerpo_html(3),
-      "y con agotados se explica qué significa")
-
-mensaje_cat = correo.armar_mensaje(
-    "vane@gmail.com", "cliente@gmail.com", "Catálogo", pdf, "catalogo.pdf",
-    cuerpo=texto_cat, html=html_cat)
-tipos_cat = [p.get_content_type() for p in mensaje_cat.walk()]
-check("text/plain" in tipos_cat and "text/html" in tipos_cat
-      and "application/pdf" in tipos_cat,
-      "el correo sale con texto, formato y el PDF adjunto")
-check("image/png" not in tipos_cat,
-      "y sin logo incrustado, que también identificaría el negocio")
 
 print()
 print("Sin cryptography, como en el navegador")

@@ -32,7 +32,7 @@ _pg = postgres_local.conectar_la_app()
 from backend import fotos
 from backend import seguridad
 from frontend import dialogos
-from frontend.vistas import (catalogo_view, cobros_view, configuracion_view,
+from frontend.vistas import (cobros_view, configuracion_view,
                              gestion_view, historial_view, inicio_view,
                              inventario_view, ventas_view)
 
@@ -105,7 +105,7 @@ seguridad.establecer("472913", "472913")
 bd.guardar_tasa(620.0)
 
 print("Inventario: alta de producto")
-inventario_view.crear_vista_inventario(page, lambda: None)
+inventario_view.crear_vista_inventario(page)
 inventario_view._formulario_producto(page, None, lambda: None)
 dlg = dialogo_abierto(page)
 check(dlg is not None, "se abre el formulario de producto")
@@ -200,13 +200,6 @@ campos[0].value = "Binance"
 check(pulsar(dlg, "Guardar"), "tiene botón Guardar")
 check("Binance" in [m["nombre"] for m in bd.listar_metodos()],
       "el método quedó guardado")
-
-print("\nCatálogo: generar")
-vista = catalogo_view.crear_vista_catalogo(page, lambda: None, lambda: None)
-check(vista is not None, "se construye la pantalla del catálogo")
-from backend import catalogo
-pdf, cuantos, _ = catalogo.armar(True)
-check(pdf[:5] == b"%PDF-" and cuantos == 1, "el catálogo sale con el producto")
 
 print("\nUn formulario incompleto no guarda nada")
 antes = bd.contar_productos()
@@ -666,7 +659,7 @@ pantallas = {
     "Inicio": lambda: inicio_view.crear_vista_inicio(page, lambda n: None,
                                                      lambda: None),
     "Venta": lambda: ventas_view.crear_vista_ventas(page, lambda n: None),
-    "Inventario": lambda: inventario_view.crear_vista_inventario(page, lambda: None),
+    "Inventario": lambda: inventario_view.crear_vista_inventario(page),
     "Cobros": lambda: cobros_view.crear_vista_cobros(page),
     "Gestion": lambda: gestion_view.crear_vista_gestion(page),
 }

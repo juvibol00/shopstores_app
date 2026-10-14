@@ -76,7 +76,7 @@ async def _armar(page: ft.Page):
         if nombre == "inicio":
             cuerpo.content = crear_vista_inicio(page, navegar, abrir_configuracion)
         elif nombre == "inventario":
-            cuerpo.content = crear_vista_inventario(page, abrir_configuracion)
+            cuerpo.content = crear_vista_inventario(page)
         elif nombre == "venta":
             cuerpo.content = crear_vista_ventas(page, navegar)
         elif nombre == "cobros":
